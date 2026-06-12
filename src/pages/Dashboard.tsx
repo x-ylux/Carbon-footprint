@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabaseClient';
 import { Link } from 'react-router-dom';
@@ -233,10 +233,9 @@ export const Dashboard: React.FC = () => {
   // DATA PROCESSING & METRIC CALCULATIONS
   // ==========================================
 
-  // Group entries by Month for Line Chart
-  const getMonthlyTrendData = () => {
+  const trendData = useMemo(() => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const grouped: { [key: string]: number } = {};
+    const grouped: Record<string, number> = {};
 
     entries.forEach(entry => {
       const date = new Date(entry.created_at);
@@ -244,14 +243,12 @@ export const Dashboard: React.FC = () => {
       grouped[key] = (grouped[key] || 0) + Number(entry.co2_emission);
     });
 
-    // Convert to sorted array (limit to last 6 months)
     return Object.entries(grouped)
       .map(([name, emissions]) => ({ name, emissions: Math.round(emissions) }))
-      .slice(-6); // Keep last 6 active months
-  };
+      .slice(-6);
+  }, [entries]);
 
-  // Category breakdown for Bar Chart (based on most recent submissions or overall averages)
-  const getCategoryBreakdown = () => {
+  const categoryData = useMemo(() => {
     const categories = {
       transportation: 0,
       energy: 0,
@@ -261,7 +258,6 @@ export const Dashboard: React.FC = () => {
       cash: 0,
     };
 
-    // We aggregate all entries to show category ratios
     entries.forEach(entry => {
       const cat = entry.category as keyof typeof categories;
       if (categories[cat] !== undefined) {
@@ -277,10 +273,9 @@ export const Dashboard: React.FC = () => {
       { name: 'Digital', emissions: Math.round(categories.digital) },
       { name: 'Cash', emissions: Math.round(categories.cash) },
     ].filter((c) => c.emissions > 0);
-  };
+  }, [entries]);
 
-  // Calculate: Total CO2 entered this month vs previous month
-  const getMonthlyEmissionsMetrics = () => {
+  const { currentMonthEmissions, pctChange } = useMemo(() => {
     const now = new Date();
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
@@ -300,14 +295,11 @@ export const Dashboard: React.FC = () => {
       }
     });
 
-    // If current month is empty, fall back to aggregate of last submission's timestamp
     if (entries.length > 0 && currentSum === 0) {
-      // Find the most recent timestamp
       const timestamps = entries.map(e => new Date(e.created_at).getTime());
       const maxTime = Math.max(...timestamps);
       const latestDate = new Date(maxTime);
-      
-      // Calculate sum for that specific date/submission
+
       entries.forEach(entry => {
         const d = new Date(entry.created_at);
         if (d.toDateString() === latestDate.toDateString()) {
@@ -315,7 +307,6 @@ export const Dashboard: React.FC = () => {
         }
       });
 
-      // For comparison, find the submission before the most recent day
       const otherDayTimestamps = timestamps.filter(t => new Date(t).toDateString() !== latestDate.toDateString());
       if (otherDayTimestamps.length > 0) {
         const prevTime = Math.max(...otherDayTimestamps);
@@ -339,14 +330,9 @@ export const Dashboard: React.FC = () => {
 
     return {
       currentMonthEmissions: currentSum,
-      prevMonthEmissions: prevSum,
-      pctChange: Math.round(pctChange)
+      pctChange: Math.round(pctChange),
     };
-  };
-
-  const trendData = getMonthlyTrendData();
-  const categoryData = getCategoryBreakdown();
-  const { currentMonthEmissions, pctChange } = getMonthlyEmissionsMetrics();
+  }, [entries]);
 
   const totalAnnualCO2 = entries.reduce((acc, e) => acc + Number(e.co2_emission), 0);
   const indiaComparisonPct = Math.round((totalAnnualCO2 / INDIA_AVERAGE_KG) * 100);

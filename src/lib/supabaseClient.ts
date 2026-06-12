@@ -1,4 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '../types/supabase';
 
 // Read from env variables
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
@@ -11,15 +12,13 @@ export const isSupabaseConfigured =
   supabaseUrl !== 'YOUR_SUPABASE_URL' && 
   supabaseAnonKey !== 'YOUR_SUPABASE_ANON_KEY';
 
-console.log(
-  isSupabaseConfigured 
-    ? '🔌 Connecting to Supabase backend...' 
-    : '📦 Supabase env vars not found. Using local Storage Mock Backend.'
-);
+if (!isSupabaseConfigured) {
+  console.warn('Supabase env vars not found. Using local Storage Mock Backend.');
+}
 
 // Create the standard Supabase client (only if configured)
-const realSupabase = isSupabaseConfigured 
-  ? createClient(supabaseUrl, supabaseAnonKey) 
+const realSupabase: SupabaseClient<Database> | null = isSupabaseConfigured 
+  ? createClient<Database>(supabaseUrl, supabaseAnonKey) 
   : null;
 
 // ==========================================
@@ -477,5 +476,6 @@ export const mockSupabase = {
 };
 
 // Export the active client
-export const supabase = isSupabaseConfigured ? realSupabase! : (mockSupabase as any);
+export const supabase: SupabaseClient<Database> = 
+  (isSupabaseConfigured ? realSupabase : (mockSupabase as any)) as SupabaseClient<Database>;
 export default supabase;

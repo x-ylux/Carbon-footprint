@@ -56,6 +56,45 @@ export const cashCategoryFactors: Record<string, number> = {
 export const cashTransactionCO2 = (category: string, amount: number) =>
   amount * (cashCategoryFactors[category] ?? cashCategoryFactors.other);
 
+export const calculateCarbonEmission = (params: {
+  category: string;
+  subcategory: string;
+  value: number;
+  unit: string;
+}) => {
+  const { category, subcategory, value, unit } = params;
+
+  if (category === 'transportation' && subcategory === 'car') return value * 0.12 * 12;
+  if (category === 'transportation' && subcategory === 'bus') return value * 2.5 * 12;
+  if (category === 'transportation' && subcategory === 'metro') return value * 0.05 * 12;
+  if (category === 'transportation' && subcategory === 'bike') return 0;
+  if (category === 'transportation' && subcategory === 'flight') return value * 200;
+
+  if (category === 'energy' && subcategory === 'electricity') return value * 0.8 * 12;
+  if (category === 'energy' && subcategory === 'gas') return value * 2.0 * 12;
+  if (category === 'energy' && subcategory === 'water') return value * 0.05 * 365;
+
+  if (category === 'food' && subcategory === 'diet_type') {
+    if (unit === 'vegetarian') return value * 0.5 * 365;
+    if (unit === 'non-vegetarian') return value * 1.2 * 365;
+    return value * 0.85 * 365;
+  }
+  if (category === 'food' && subcategory === 'meat') return value * 12 * 12;
+
+  if (category === 'shopping' && subcategory === 'online') return value * 5 * 12;
+  if (category === 'shopping' && subcategory === 'clothing') return value * 10 * 12;
+  if (category === 'shopping' && subcategory === 'electronics') return value * 80;
+  if (category === 'shopping' && subcategory === 'waste') return value * 2 * 12;
+
+  if (category === 'digital' && subcategory === 'streaming') return value * 0.05 * 12;
+  if (category === 'digital' && subcategory === 'cloud') return value * 0.2;
+  if (category === 'digital' && subcategory === 'email') return value * 0.004 * 365;
+  if (category === 'digital' && subcategory === 'calls') return value * 0.1 * 12;
+  if (category === 'digital' && subcategory === 'social') return value * 0.02 * 365;
+
+  return 0;
+};
+
 export const TIPS = [
   {
     title: 'Switch to LED bulbs',

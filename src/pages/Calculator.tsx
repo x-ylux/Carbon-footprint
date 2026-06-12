@@ -83,6 +83,8 @@ export const Calculator: React.FC = () => {
   const [saveLoading, setSaveLoading] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [receiptText, setReceiptText] = useState('');
+  const [receiptParseMessage, setReceiptParseMessage] = useState<string | null>(null);
   const [cashTransactions, setCashTransactions] = useState<
     Array<{ id: string; category: string; amount: number; transaction_date: string; co2_emission: number }>
   >([]);
@@ -156,6 +158,38 @@ export const Calculator: React.FC = () => {
   });
 
   const cashTotal = cashTransactions.reduce((s, t) => s + Number(t.co2_emission), 0);
+
+  const parseReceiptText = () => {
+    setReceiptParseMessage(null);
+    const text = receiptText.trim();
+    if (!text) {
+      setReceiptParseMessage('Paste receipt text to auto-fill the transaction fields.');
+      return;
+    }
+
+    const amountMatch = text.match(/₹?\s*([0-9]+(?:\.[0-9]{1,2})?)/);
+    const dateMatch = text.match(/(\d{4}-\d{2}-\d{2})|(\d{2}\/\d{2}\/\d{4})/);
+    const categoryMatch = text.match(/\b(food|transport|shopping|utilities|entertainment|healthcare|other)\b/i);
+
+    const parsedAmount = amountMatch ? Number(amountMatch[1]) : 0;
+    const parsedDate = dateMatch
+      ? dateMatch[0].includes('/')
+        ? new Date(dateMatch[0].split('/').reverse().join('-')).toISOString().split('T')[0]
+        : dateMatch[0]
+      : new Date().toISOString().split('T')[0];
+    const parsedCategory = categoryMatch ? categoryMatch[1].toLowerCase() : 'other';
+
+    cashForm.reset({
+      category: parsedCategory,
+      amount: parsedAmount,
+      transaction_date: parsedDate,
+      receipt_url: cashForm.getValues('receipt_url'),
+    });
+
+    setReceiptParseMessage(
+      `Parsed receipt: ${parsedCategory} for ₹${parsedAmount.toFixed(2)} on ${parsedDate}. Review before saving.`,
+    );
+  };
 
   useEffect(() => {
     const transportTotal =
@@ -241,44 +275,39 @@ export const Calculator: React.FC = () => {
       const nowStr = new Date().toISOString();
       const insertRows = [
         // Transportation
-        { category: 'transportation', subcategory: 'car', value: data.car_km, unit: 'km/month', co2_emission: data.car_km * 0.12 * 12, created_at: nowStr },
-        { category: 'transportation', subcategory: 'bus', value: data.bus_days, unit: 'days/month', co2_emission: data.bus_days * 2.5 * 12, created_at: nowStr },
-        { category: 'transportation', subcategory: 'metro', value: data.metro_km, unit: 'km/month', co2_emission: data.metro_km * 0.05 * 12, created_at: nowStr },
-        { category: 'transportation', subcategory: 'bike', value: data.bike_km, unit: 'km/month', co2_emission: 0, created_at: nowStr },
-        { category: 'transportation', subcategory: 'flight', value: data.flight_count, unit: 'flights/year', co2_emission: data.flight_count * 200, created_at: nowStr },
-        
+        { category: 'transportation', subcategory: 'car', value: data.car_km, unit: 'km/month', created_at: nowStr },
+        { category: 'transportation', subcategory: 'bus', value: data.bus_days, unit: 'days/month', created_at: nowStr },
+        { category: 'transportation', subcategory: 'metro', value: data.metro_km, unit: 'km/month', created_at: nowStr },
+        { category: 'transportation', subcategory: 'bike', value: data.bike_km, unit: 'km/month', created_at: nowStr },
+        { category: 'transportation', subcategory: 'flight', value: data.flight_count, unit: 'flights/year', created_at: nowStr },
+
         // Energy
-        { category: 'energy', subcategory: 'electricity', value: data.elec_units, unit: 'units/month', co2_emission: data.elec_units * 0.8 * 12, created_at: nowStr },
-        { category: 'energy', subcategory: 'gas', value: data.gas_liters, unit: 'liters/month', co2_emission: data.gas_liters * 2.0 * 12, created_at: nowStr },
-        { category: 'energy', subcategory: 'water', value: data.water_buckets, unit: 'buckets/day', co2_emission: data.water_buckets * 0.05 * 365, created_at: nowStr },
-        
+        { category: 'energy', subcategory: 'electricity', value: data.elec_units, unit: 'units/month', created_at: nowStr },
+        { category: 'energy', subcategory: 'gas', value: data.gas_liters, unit: 'liters/month', created_at: nowStr },
+        { category: 'energy', subcategory: 'water', value: data.water_buckets, unit: 'buckets/day', created_at: nowStr },
+
         // Food
-        { category: 'food', subcategory: 'diet_type', value: data.food_type === 'vegetarian' ? 1 : data.food_type === 'non-vegetarian' ? 3 : 2, unit: 'diet_index', co2_emission: data.meals_per_day * (data.food_type === 'vegetarian' ? 0.5 : data.food_type === 'non-vegetarian' ? 1.2 : 0.85) * 365, created_at: nowStr },
-        { category: 'food', subcategory: 'meat', value: data.meat_kg, unit: 'kg/month', co2_emission: data.meat_kg * 12 * 12, created_at: nowStr },
-        
+        { category: 'food', subcategory: 'diet_type', value: data.meals_per_day, unit: data.food_type, created_at: nowStr },
+        { category: 'food', subcategory: 'meat', value: data.meat_kg, unit: 'kg/month', created_at: nowStr },
+
         // Shopping
-        { category: 'shopping', subcategory: 'online', value: data.online_orders, unit: 'orders/month', co2_emission: data.online_orders * 5 * 12, created_at: nowStr },
-        { category: 'shopping', subcategory: 'clothing', value: data.clothing_items, unit: 'items/month', co2_emission: data.clothing_items * 10 * 12, created_at: nowStr },
-        { category: 'shopping', subcategory: 'electronics', value: data.electronics_count, unit: 'devices/year', co2_emission: data.electronics_count * 80, created_at: nowStr },
-        { category: 'shopping', subcategory: 'waste', value: data.food_waste_pct, unit: 'waste_pct', co2_emission: data.food_waste_pct * 2 * 12, created_at: nowStr },
+        { category: 'shopping', subcategory: 'online', value: data.online_orders, unit: 'orders/month', created_at: nowStr },
+        { category: 'shopping', subcategory: 'clothing', value: data.clothing_items, unit: 'items/month', created_at: nowStr },
+        { category: 'shopping', subcategory: 'electronics', value: data.electronics_count, unit: 'devices/year', created_at: nowStr },
+        { category: 'shopping', subcategory: 'waste', value: data.food_waste_pct, unit: 'waste_pct', created_at: nowStr },
 
         // Digital
-        { category: 'digital', subcategory: 'streaming', value: data.streaming_hours, unit: 'hours/month', co2_emission: digitalCO2.streaming(data.streaming_hours), created_at: nowStr },
-        { category: 'digital', subcategory: 'cloud', value: data.cloud_gb, unit: 'GB', co2_emission: digitalCO2.cloud(data.cloud_gb), created_at: nowStr },
-        { category: 'digital', subcategory: 'email', value: data.email_count, unit: 'emails/day', co2_emission: digitalCO2.email(data.email_count), created_at: nowStr },
-        { category: 'digital', subcategory: 'calls', value: data.call_hours, unit: 'hours/month', co2_emission: digitalCO2.calls(data.call_hours), created_at: nowStr },
-        { category: 'digital', subcategory: 'social', value: data.social_hours, unit: 'hours/day', co2_emission: digitalCO2.social(data.social_hours), created_at: nowStr },
+        { category: 'digital', subcategory: 'streaming', value: data.streaming_hours, unit: 'hours/month', created_at: nowStr },
+        { category: 'digital', subcategory: 'cloud', value: data.cloud_gb, unit: 'GB', created_at: nowStr },
+        { category: 'digital', subcategory: 'email', value: data.email_count, unit: 'emails/day', created_at: nowStr },
+        { category: 'digital', subcategory: 'calls', value: data.call_hours, unit: 'hours/month', created_at: nowStr },
+        { category: 'digital', subcategory: 'social', value: data.social_hours, unit: 'hours/day', created_at: nowStr },
       ];
 
-      // Remove zero-emission mock entries to keep DB clean, keeping only non-zeroes or key inputs
-      const nonZeroRows = insertRows.filter(r => r.co2_emission > 0 || r.subcategory === 'diet_type');
-      
-      const { error } = await supabase.from('carbon_entries').insert(
-        nonZeroRows.map(row => ({
-          ...row,
-          user_id: user.id
-        }))
-      );
+      const nonZeroRows = insertRows.filter(r => r.value > 0 || r.subcategory === 'diet_type');
+      const { data: inserted, error } = await supabase.rpc('insert_carbon_entries', {
+        entries: JSON.stringify(nonZeroRows),
+      });
 
       if (error) {
         throw new Error(error.message);
@@ -307,25 +336,22 @@ export const Calculator: React.FC = () => {
     if (!user) return;
     setCashSaving(true);
     setErrorMsg(null);
-    const co2 = cashTransactionCO2(data.category, data.amount);
     try {
-      const { data: inserted, error } = await supabase.from('cash_transactions').insert([
-        {
-          user_id: user.id,
-          category: data.category,
-          amount: data.amount,
-          transaction_date: data.transaction_date,
-          receipt_url: data.receipt_url || null,
-          co2_emission: co2,
-        },
-      ]);
+      const { data: inserted, error } = await supabase.rpc('insert_cash_transaction', {
+        category: data.category,
+        amount: data.amount,
+        transaction_date: data.transaction_date,
+        receipt_url: data.receipt_url || null,
+        currency: 'INR',
+      });
+
       if (error) throw error;
-      const newTx = inserted?.[0] ?? {
+      const newTx = inserted ?? {
         id: crypto.randomUUID(),
         category: data.category,
         amount: data.amount,
         transaction_date: data.transaction_date,
-        co2_emission: co2,
+        co2_emission: cashTransactionCO2(data.category, data.amount),
       };
       setCashTransactions((prev) => [newTx, ...prev].slice(0, 10));
       cashForm.reset({
@@ -334,6 +360,7 @@ export const Calculator: React.FC = () => {
         transaction_date: new Date().toISOString().split('T')[0],
         receipt_url: '',
       });
+      setReceiptParseMessage(null);
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to save transaction.');
     } finally {
@@ -636,6 +663,29 @@ export const Calculator: React.FC = () => {
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-slate-600 dark:text-slate-300">Receipt URL (optional)</label>
                     <input type="text" placeholder="https://..." className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-forest-500" {...cashForm.register('receipt_url')} />
+                  </div>
+                  <div className="sm:col-span-2 space-y-3">
+                    <label className="text-sm font-semibold text-slate-600 dark:text-slate-300">Receipt OCR (paste receipt text)</label>
+                    <textarea
+                      rows={4}
+                      value={receiptText}
+                      onChange={(event) => setReceiptText(event.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 rounded-2xl text-slate-900 dark:text-white focus:outline-none focus:border-forest-500"
+                      placeholder="Example: Food 1500 2026-06-12"
+                      aria-label="Receipt text for OCR parsing"
+                    />
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={parseReceiptText}
+                        className="flex-1 px-5 py-2.5 bg-forest-600 hover:bg-forest-700 text-white font-bold rounded-xl transition"
+                      >
+                        Parse Receipt
+                      </button>
+                      {receiptParseMessage ? (
+                        <p className="text-sm text-slate-500 dark:text-slate-400 italic">{receiptParseMessage}</p>
+                      ) : null}
+                    </div>
                   </div>
                   <div className="sm:col-span-2">
                     <button type="submit" disabled={cashSaving} className="flex items-center space-x-2 px-5 py-2.5 bg-sky-primary hover:bg-sky-dark text-white font-bold rounded-xl transition cursor-pointer">

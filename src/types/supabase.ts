@@ -210,15 +210,11 @@ export interface Database {
         };
         Returns: number;
       };
-      insert_carbon_entry: {
+      insert_carbon_entries: {
         Args: {
-          category: string;
-          subcategory: string;
-          value: number;
-          unit: string;
-          created_at?: string;
+          entries: Json;
         };
-        Returns: Database['public']['Tables']['carbon_entries']['Row'];
+        Returns: Database['public']['Tables']['carbon_entries']['Row'][];
       };
       insert_cash_transaction: {
         Args: {
@@ -226,6 +222,7 @@ export interface Database {
           amount: number;
           transaction_date: string;
           receipt_url?: string;
+          currency?: string;
         };
         Returns: Database['public']['Tables']['cash_transactions']['Row'];
       };
