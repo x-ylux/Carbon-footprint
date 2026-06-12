@@ -14,7 +14,7 @@ interface AuthContextType {
   profile: Profile | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
-  signUp: (email: string, password: string, name: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string, name: string) => Promise<{ error: any; needsVerification?: boolean }>;
   signOut: () => Promise<{ error: any }>;
 }
 
@@ -106,14 +106,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       email,
       password,
       options: {
-        data: { name }
-      }
+        data: { name },
+        emailRedirectTo: window.location.origin,
+      },
     });
-    if (data?.user) {
+
+    const needsVerification = data?.user && !data?.session;
+
+    if (data?.session?.user) {
+      setUser(data.session.user);
+      await fetchProfile(data.session.user.id);
+    } else if (data?.user && data.session) {
       setUser(data.user);
       await fetchProfile(data.user.id);
     }
-    return { error };
+
+    return { error, needsVerification };
   };
 
   const signOut = async () => {

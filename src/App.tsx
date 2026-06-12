@@ -6,6 +6,8 @@ import Dashboard from './pages/Dashboard';
 import Calculator from './pages/Calculator';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import About from './pages/About';
+import CollectiveAction from './pages/CollectiveAction';
 
 function App() {
   return (
@@ -15,6 +17,8 @@ function App() {
         <main className="flex-grow">
           <Routes>
             <Route path="/" element={<Home />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/collective" element={<CollectiveAction />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             

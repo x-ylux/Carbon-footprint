@@ -25,6 +25,8 @@ export const Signup: React.FC = () => {
   const navigate = useNavigate();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [verificationPending, setVerificationPending] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState('');
 
   const {
     register,
@@ -38,15 +40,17 @@ export const Signup: React.FC = () => {
     setLoading(true);
     setErrorMsg(null);
     try {
-      const { error } = await signUp(data.email, data.password, data.name);
+      const { error, needsVerification } = await signUp(data.email, data.password, data.name);
       if (error) {
         setErrorMsg(error.message || 'Failed to create an account. Please try again.');
+      } else if (needsVerification) {
+        setVerificationPending(true);
+        setPendingEmail(data.email);
       } else {
-        // Trigger a nice success confetti burst
         confetti({
           particleCount: 100,
           spread: 70,
-          origin: { y: 0.6 }
+          origin: { y: 0.6 },
         });
         navigate('/dashboard');
       }
@@ -80,6 +84,22 @@ export const Signup: React.FC = () => {
           </p>
         </div>
 
+        {verificationPending && (
+          <div className="mb-6 p-5 rounded-xl bg-sky-light dark:bg-sky-dark/20 border border-sky-primary/30 text-sky-dark dark:text-sky-primary space-y-3 animate-fade-in">
+            <h3 className="font-bold text-lg">Verify Your Email</h3>
+            <p className="text-sm font-medium">
+              We sent a verification link to <strong>{pendingEmail}</strong>. Click the link in your
+              email to activate your account, then sign in.
+            </p>
+            <Link
+              to="/login"
+              className="inline-flex items-center px-4 py-2 rounded-lg bg-sky-primary text-white font-bold text-sm hover:bg-sky-dark transition"
+            >
+              Go to Sign In
+            </Link>
+          </div>
+        )}
+
         {/* Error Alert Box */}
         {errorMsg && (
           <div className="mb-6 p-4 rounded-xl bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/40 text-rose-600 dark:text-rose-400 flex items-start space-x-2.5 text-sm font-semibold animate-shake">
@@ -89,7 +109,7 @@ export const Signup: React.FC = () => {
         )}
 
         {/* Input Form */}
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <form onSubmit={handleSubmit(onSubmit)} className={`space-y-4 ${verificationPending ? 'opacity-50 pointer-events-none' : ''}`}>
           
           {/* Name input */}
           <div className="space-y-1.5">

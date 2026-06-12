@@ -55,6 +55,26 @@ interface Goal {
   created_at: string;
 }
 
+interface Budget {
+  id: string;
+  user_id: string;
+  monthly_limit: number;
+  month_year: string;
+  spent: number;
+  created_at: string;
+}
+
+interface CashTransaction {
+  id: string;
+  user_id: string;
+  category: string;
+  amount: number;
+  transaction_date: string;
+  receipt_url?: string | null;
+  co2_emission: number;
+  created_at: string;
+}
+
 interface User {
   id: string;
   email: string;
@@ -187,11 +207,81 @@ export const mockSupabase = {
   },
 
   from: (table: string) => {
+    const MOCK_EVENTS = [
+      { id: '1', title: 'Tree Plantation Drive', description: 'Plant 100 native trees in urban parks across Delhi NCR.', event_date: '2026-07-15', location: 'Delhi, India', participants_count: 245, co2_impact_kg: 5000 },
+      { id: '2', title: 'Zero-Waste Workshop', description: 'Learn practical tips to reduce household waste.', event_date: '2026-08-02', location: 'Mumbai, India', participants_count: 120, co2_impact_kg: 800 },
+      { id: '3', title: 'Cycling Sunday', description: 'Community bike ride promoting low-carbon commuting.', event_date: '2026-06-22', location: 'Bangalore, India', participants_count: 89, co2_impact_kg: 1200 },
+    ];
+    const MOCK_CHALLENGES = [
+      { id: '1', title: '30-Day Meat-Free Challenge', description: 'Go vegetarian for 30 days.', target_kg: 50000, current_kg: 32400, participants_count: 412, end_date: '2026-07-31' },
+      { id: '2', title: 'No Plastic July', description: 'Eliminate single-use plastics.', target_kg: 30000, current_kg: 18500, participants_count: 278, end_date: '2026-07-31' },
+      { id: '3', title: 'Bike to Work Week', description: 'Swap car commutes for cycling.', target_kg: 15000, current_kg: 9800, participants_count: 156, end_date: '2026-06-20' },
+    ];
+
     return {
       select: (_fields: string = '*') => {
+        if (table === 'collective_events') {
+          return {
+            order: (_f: string, _opts?: any) => ({
+              then: (cb: any) => cb({ data: MOCK_EVENTS, error: null }),
+            }),
+          };
+        }
+        if (table === 'group_challenges') {
+          return {
+            order: (_f: string, _opts?: any) => ({
+              then: (cb: any) => cb({ data: MOCK_CHALLENGES, error: null }),
+            }),
+          };
+        }
+
         return {
-          eq: (_field: string, val: any) => {
+          eq: (field: string, val: any) => {
+            const eqBuilder = {
+              eq: (_field2: string, val2: any) => ({
+                single: async () => {
+                  const session = getLocal('mock_session', null);
+                  if (!session) return { data: null, error: { message: 'Unauthorized' } };
+                  if (table === 'budgets') {
+                    const budgets: Budget[] = getLocal('mock_budgets', []);
+                    const budget = budgets.find(
+                      (b) => b.user_id === val && b.month_year === val2
+                    );
+                    return { data: budget || null, error: null };
+                  }
+                  return { data: null, error: { message: 'Not implemented' } };
+                },
+              }),
+              order: (_orderField: string, { ascending }: any = {}) => ({
+                then: (callback: any) => {
+                  const session = getLocal('mock_session', null);
+                  if (!session) return callback({ data: [], error: { message: 'Unauthorized' } });
+                  if (table === 'cash_transactions') {
+                    let txs: CashTransaction[] = getLocal('mock_cash_transactions', []);
+                    txs = txs.filter((t) => t.user_id === val);
+                    txs.sort((a, b) => {
+                      const ta = new Date(a.transaction_date).getTime();
+                      const tb = new Date(b.transaction_date).getTime();
+                      return ascending ? ta - tb : tb - ta;
+                    });
+                    return callback({ data: txs, error: null });
+                  }
+                  return callback({ data: [], error: null });
+                },
+              }),
+              then: (callback: any) => {
+                const session = getLocal('mock_session', null);
+                if (!session) return callback({ data: [], error: { message: 'Unauthorized' } });
+                if (table === 'cash_transactions' && field === 'user_id') {
+                  const txs: CashTransaction[] = getLocal('mock_cash_transactions', []);
+                  return callback({ data: txs.filter((t) => t.user_id === val), error: null });
+                }
+                return callback({ data: [], error: null });
+              },
+            };
+
             return {
+              ...eqBuilder,
               single: async () => {
                 const session = getLocal('mock_session', null);
                 if (!session) return { data: null, error: { message: 'Unauthorized' } };
@@ -250,6 +340,23 @@ export const mockSupabase = {
         const session = getLocal('mock_session', null);
         if (!session) return { data: null, error: { message: 'Unauthorized' } };
 
+        if (table === 'cash_transactions') {
+          const txs: CashTransaction[] = getLocal('mock_cash_transactions', []);
+          const newTxs: CashTransaction[] = data.map((item) => ({
+            id: crypto.randomUUID(),
+            user_id: session.user.id,
+            category: item.category,
+            amount: item.amount,
+            transaction_date: item.transaction_date,
+            receipt_url: item.receipt_url,
+            co2_emission: item.co2_emission,
+            created_at: new Date().toISOString(),
+          }));
+          setLocal('mock_cash_transactions', [...txs, ...newTxs]);
+          notifySubscribers();
+          return { data: newTxs, error: null };
+        }
+
         if (table === 'carbon_entries') {
           const entries: CarbonEntry[] = getLocal('mock_carbon_entries', []);
           const newEntries: CarbonEntry[] = data.map(item => ({
@@ -296,6 +403,26 @@ export const mockSupabase = {
           setLocal('mock_goals', goals);
           notifySubscribers();
           return { data: newGoal, error: null };
+        }
+
+        if (table === 'budgets') {
+          const budgets: Budget[] = getLocal('mock_budgets', []);
+          const idx = budgets.findIndex(
+            (b) => b.user_id === session.user.id && b.month_year === data.month_year
+          );
+          const newBudget: Budget = {
+            id: idx >= 0 ? budgets[idx].id : crypto.randomUUID(),
+            user_id: session.user.id,
+            monthly_limit: data.monthly_limit,
+            month_year: data.month_year,
+            spent: data.spent ?? 0,
+            created_at: new Date().toISOString(),
+          };
+          if (idx >= 0) budgets[idx] = newBudget;
+          else budgets.push(newBudget);
+          setLocal('mock_budgets', budgets);
+          notifySubscribers();
+          return { data: newBudget, error: null };
         }
 
         return { data: null, error: { message: 'Not implemented' } };

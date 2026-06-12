@@ -21,9 +21,13 @@ import {
   Trash2,
   RefreshCw,
   AlertCircle,
-  Loader2
+  Loader2,
+  Lightbulb,
+  Wallet,
+  Globe2
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { INDIA_AVERAGE_KG, INDIA_AVERAGE_TONNES, TIPS } from '../lib/co2Formulas';
 
 interface CarbonEntry {
   id: string;
@@ -42,7 +46,13 @@ export const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [updatingGoal, setUpdatingGoal] = useState(false);
   const [goalInput, setGoalInput] = useState<string>('3000');
+  const [budgetLimit, setBudgetLimit] = useState<number>(250);
+  const [budgetSpent, setBudgetSpent] = useState<number>(0);
+  const [budgetInput, setBudgetInput] = useState<string>('250');
+  const [updatingBudget, setUpdatingBudget] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const currentMonthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
 
   // Fetch carbon entries and goal limit
   const fetchData = async () => {
@@ -75,6 +85,33 @@ export const Dashboard: React.FC = () => {
         setGoal(Number(goalData.annual_limit));
         setGoalInput(String(goalData.annual_limit));
       }
+
+      const { data: budgetData } = await supabase
+        .from('budgets')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('month_year', currentMonthKey)
+        .single();
+
+      if (budgetData) {
+        setBudgetLimit(Number(budgetData.monthly_limit));
+        setBudgetSpent(Number(budgetData.spent));
+        setBudgetInput(String(budgetData.monthly_limit));
+      }
+
+      const { data: cashData } = await supabase
+        .from('cash_transactions')
+        .select('co2_emission, transaction_date')
+        .eq('user_id', user.id);
+
+      if (cashData?.length) {
+        const monthCash = cashData.filter((t: { transaction_date: string }) => {
+          const d = new Date(t.transaction_date);
+          return d.getMonth() === new Date().getMonth() && d.getFullYear() === new Date().getFullYear();
+        });
+        const cashMonthTotal = monthCash.reduce((s: number, t: { co2_emission: number }) => s + Number(t.co2_emission), 0);
+        setBudgetSpent((prev) => prev + cashMonthTotal);
+      }
     } catch (err: any) {
       console.error('Fetch dashboard data error:', err);
       setErrorMsg(err.message || 'Failed to load dashboard statistics.');
@@ -106,6 +143,32 @@ export const Dashboard: React.FC = () => {
   }, [user]);
 
   // Handle Goal Update
+  const handleUpdateBudget = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    setUpdatingBudget(true);
+    const val = Number(budgetInput);
+    if (isNaN(val) || val <= 0) {
+      setErrorMsg('Budget must be a positive number.');
+      setUpdatingBudget(false);
+      return;
+    }
+    try {
+      const { error } = await supabase.from('budgets').upsert({
+        user_id: user.id,
+        monthly_limit: val,
+        month_year: currentMonthKey,
+        spent: budgetSpent,
+      });
+      if (error) throw error;
+      setBudgetLimit(val);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to update budget.');
+    } finally {
+      setUpdatingBudget(false);
+    }
+  };
+
   const handleUpdateGoal = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
@@ -193,7 +256,9 @@ export const Dashboard: React.FC = () => {
       transportation: 0,
       energy: 0,
       food: 0,
-      shopping: 0
+      shopping: 0,
+      digital: 0,
+      cash: 0,
     };
 
     // We aggregate all entries to show category ratios
@@ -206,10 +271,12 @@ export const Dashboard: React.FC = () => {
 
     return [
       { name: 'Transport', emissions: Math.round(categories.transportation) },
-      { name: 'Home Energy', emissions: Math.round(categories.energy) },
-      { name: 'Food & Diet', emissions: Math.round(categories.food) },
-      { name: 'Shopping', emissions: Math.round(categories.shopping) }
-    ];
+      { name: 'Energy', emissions: Math.round(categories.energy) },
+      { name: 'Food', emissions: Math.round(categories.food) },
+      { name: 'Shopping', emissions: Math.round(categories.shopping) },
+      { name: 'Digital', emissions: Math.round(categories.digital) },
+      { name: 'Cash', emissions: Math.round(categories.cash) },
+    ].filter((c) => c.emissions > 0);
   };
 
   // Calculate: Total CO2 entered this month vs previous month
@@ -280,6 +347,15 @@ export const Dashboard: React.FC = () => {
   const trendData = getMonthlyTrendData();
   const categoryData = getCategoryBreakdown();
   const { currentMonthEmissions, pctChange } = getMonthlyEmissionsMetrics();
+
+  const totalAnnualCO2 = entries.reduce((acc, e) => acc + Number(e.co2_emission), 0);
+  const indiaComparisonPct = Math.round((totalAnnualCO2 / INDIA_AVERAGE_KG) * 100);
+  const vsIndiaLabel =
+    totalAnnualCO2 < INDIA_AVERAGE_KG
+      ? `${Math.round(((INDIA_AVERAGE_KG - totalAnnualCO2) / INDIA_AVERAGE_KG) * 100)}% below India avg`
+      : `${Math.round(((totalAnnualCO2 - INDIA_AVERAGE_KG) / INDIA_AVERAGE_KG) * 100)}% above India avg`;
+
+  const budgetPercent = budgetLimit > 0 ? Math.min(Math.round((budgetSpent / budgetLimit) * 100), 100) : 0;
 
   // Progress calculations
   const totalAnnualRate = entries.reduce((acc, curr) => acc + Number(curr.co2_emission), 0);
@@ -364,6 +440,32 @@ export const Dashboard: React.FC = () => {
             <Plus className="w-4 h-4" />
             <span>New Calculation</span>
           </Link>
+        </div>
+      </div>
+
+      {/* India Comparison Banner */}
+      <div className="bg-gradient-to-r from-forest-600 to-sky-dark rounded-2xl p-6 text-white shadow-lg shadow-forest-600/20 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-48 h-48 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 relative z-10">
+          <div className="flex items-start space-x-4">
+            <div className="p-3 bg-white/20 rounded-xl">
+              <Globe2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="font-display font-extrabold text-xl">India Average Comparison</h3>
+              <p className="text-forest-100 text-sm font-medium mt-1">
+                India's per-capita average is {INDIA_AVERAGE_TONNES} tonnes ({INDIA_AVERAGE_KG.toLocaleString()} kg) per year.
+                You are at <strong className="text-white">{vsIndiaLabel}</strong>.
+              </p>
+            </div>
+          </div>
+          <div className="text-center sm:text-right">
+            <div className="text-4xl font-black">{totalAnnualCO2.toLocaleString()}</div>
+            <div className="text-sm font-semibold text-forest-200">kg CO₂e / year (total logged)</div>
+            <div className="mt-2 text-xs font-bold bg-white/20 px-3 py-1 rounded-full">
+              {indiaComparisonPct}% of India average
+            </div>
+          </div>
         </div>
       </div>
 
@@ -521,7 +623,71 @@ export const Dashboard: React.FC = () => {
         {/* Right Column: Goal Settings & Live Logs */}
         <div className="lg:col-span-4 space-y-8">
           
-          {/* Widget 1: Update Goal limit */}
+          {/* Monthly Budget Widget */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/40 rounded-2xl p-6 shadow-sm space-y-4">
+            <div className="flex items-center space-x-2">
+              <Wallet className="w-5 h-5 text-sky-primary" />
+              <h3 className="font-display font-bold text-lg text-slate-800 dark:text-white">
+                Monthly Carbon Budget
+              </h3>
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm font-semibold">
+                <span className="text-slate-500">Spent this month</span>
+                <span className="text-slate-800 dark:text-white">{Math.round(budgetSpent)} / {budgetLimit} kg</span>
+              </div>
+              <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-3 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${budgetPercent >= 100 ? 'bg-rose-500' : budgetPercent >= 75 ? 'bg-amber-500' : 'bg-sky-primary'}`}
+                  style={{ width: `${budgetPercent}%` }}
+                />
+              </div>
+            </div>
+            <form onSubmit={handleUpdateBudget} className="space-y-3">
+              <input
+                type="number"
+                value={budgetInput}
+                onChange={(e) => setBudgetInput(e.target.value)}
+                className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-sky-primary font-bold"
+              />
+              <button
+                type="submit"
+                disabled={updatingBudget}
+                className="w-full py-2.5 bg-sky-light dark:bg-sky-dark/30 text-sky-dark dark:text-sky-primary font-bold rounded-xl hover:bg-sky-primary hover:text-white transition cursor-pointer"
+              >
+                {updatingBudget ? 'Updating...' : 'Set Monthly Budget'}
+              </button>
+            </form>
+          </div>
+
+          {/* Top 5 Tips */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/40 rounded-2xl p-6 shadow-sm space-y-4">
+            <div className="flex items-center space-x-2">
+              <Lightbulb className="w-5 h-5 text-amber-500" />
+              <h3 className="font-display font-bold text-lg text-slate-800 dark:text-white">
+                Top 5 Reduction Tips
+              </h3>
+            </div>
+            <div className="space-y-3">
+              {TIPS.map((tip, i) => (
+                <div
+                  key={tip.title}
+                  className="p-3 rounded-xl bg-slate-50 dark:bg-slate-850/40 border border-slate-100 dark:border-slate-800 hover:border-forest-300 dark:hover:border-forest-700 transition-all duration-200"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-bold text-forest-600 dark:text-forest-400">#{i + 1}</span>
+                    <span className="text-2xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-0.5 rounded-full">
+                      -{tip.savings}
+                    </span>
+                  </div>
+                  <h4 className="text-sm font-bold text-slate-800 dark:text-white">{tip.title}</h4>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{tip.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Widget: Update Goal limit */}
           <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/40 rounded-2xl p-6 shadow-sm space-y-4">
             <div className="flex items-center space-x-2">
               <Target className="w-5 h-5 text-forest-500" />

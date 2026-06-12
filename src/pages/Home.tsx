@@ -61,7 +61,7 @@ export const Home: React.FC = () => {
                     to="/signup"
                     className="w-full sm:w-auto flex items-center justify-center space-x-2 px-8 py-3.5 rounded-xl font-bold text-white bg-forest-600 hover:bg-forest-700 shadow-lg shadow-forest-600/35 hover:scale-[1.03] transition-all duration-300 cursor-pointer"
                   >
-                    <span>Track Your Footprint</span>
+                    <span>Get Started</span>
                     <ArrowRight className="w-5 h-5" />
                   </Link>
                   <Link

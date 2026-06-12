@@ -19,6 +19,16 @@ import {
   Check
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import {
+  transportCO2,
+  energyCO2,
+  foodCO2,
+  shoppingCO2,
+  digitalCO2,
+  cashTransactionCO2,
+  cashCategoryFactors,
+} from '../lib/co2Formulas';
+import { Monitor, Wallet } from 'lucide-react';
 
 // Validation Schema
 const calculatorSchema = z.object({
@@ -43,12 +53,28 @@ const calculatorSchema = z.object({
   online_orders: z.coerce.number().nonnegative('Must be at least 0').default(0),
   clothing_items: z.coerce.number().nonnegative('Must be at least 0').default(0),
   electronics_count: z.coerce.number().nonnegative('Must be at least 0').default(0),
-  food_waste_pct: z.coerce.number().nonnegative('Must be at least 0').max(100, 'Max 100%').default(0)
+  food_waste_pct: z.coerce.number().nonnegative('Must be at least 0').max(100, 'Max 100%').default(0),
+
+  // Digital footprint
+  streaming_hours: z.coerce.number().nonnegative().default(0),
+  cloud_gb: z.coerce.number().nonnegative().default(0),
+  email_count: z.coerce.number().nonnegative().default(0),
+  call_hours: z.coerce.number().nonnegative().default(0),
+  social_hours: z.coerce.number().nonnegative().default(0),
 });
 
 type CalculatorFormInput = z.infer<typeof calculatorSchema>;
 
-type TabId = 'transport' | 'energy' | 'food' | 'shopping';
+const cashSchema = z.object({
+  category: z.string().min(1),
+  amount: z.coerce.number().positive('Amount must be positive'),
+  transaction_date: z.string().min(1),
+  receipt_url: z.string().optional(),
+});
+
+type CashFormInput = z.infer<typeof cashSchema>;
+
+type TabId = 'transport' | 'energy' | 'food' | 'shopping' | 'digital' | 'cash';
 
 export const Calculator: React.FC = () => {
   const { user } = useAuth();
@@ -57,6 +83,20 @@ export const Calculator: React.FC = () => {
   const [saveLoading, setSaveLoading] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [cashTransactions, setCashTransactions] = useState<
+    Array<{ id: string; category: string; amount: number; transaction_date: string; co2_emission: number }>
+  >([]);
+  const [cashSaving, setCashSaving] = useState(false);
+
+  const cashForm = useForm<CashFormInput>({
+    resolver: zodResolver(cashSchema) as any,
+    defaultValues: {
+      category: 'food',
+      amount: 0,
+      transaction_date: new Date().toISOString().split('T')[0],
+      receipt_url: '',
+    },
+  });
 
   const {
     register,
@@ -80,9 +120,26 @@ export const Calculator: React.FC = () => {
       online_orders: 0,
       clothing_items: 0,
       electronics_count: 0,
-      food_waste_pct: 0
-    }
+      food_waste_pct: 0,
+      streaming_hours: 0,
+      cloud_gb: 0,
+      email_count: 0,
+      call_hours: 0,
+      social_hours: 0,
+    },
   });
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('cash_transactions')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('transaction_date', { ascending: false })
+      .then(({ data }: { data: typeof cashTransactions | null }) => {
+        if (data) setCashTransactions(data.slice(0, 10));
+      });
+  }, [user]);
 
   // Watch values for real-time calculation
   const watchedValues = watch();
@@ -93,50 +150,57 @@ export const Calculator: React.FC = () => {
     energy: 0,
     food: 0,
     shopping: 0,
-    total: 0
+    digital: 0,
+    cash: 0,
+    total: 0,
   });
 
-  // Re-calculate emissions whenever watched values change
+  const cashTotal = cashTransactions.reduce((s, t) => s + Number(t.co2_emission), 0);
+
   useEffect(() => {
-    // 1. Transport emissions (kg/year)
-    const carCO2 = (watchedValues.car_km || 0) * 0.12 * 12;
-    const busCO2 = (watchedValues.bus_days || 0) * 2.5 * 12;
-    const metroCO2 = (watchedValues.metro_km || 0) * 0.05 * 12;
-    const bikeCO2 = 0;
-    const flightCO2 = (watchedValues.flight_count || 0) * 200;
-    const transportTotal = carCO2 + busCO2 + metroCO2 + bikeCO2 + flightCO2;
+    const transportTotal =
+      transportCO2.car(watchedValues.car_km || 0) +
+      transportCO2.bus(watchedValues.bus_days || 0) +
+      transportCO2.metro(watchedValues.metro_km || 0) +
+      transportCO2.bike() +
+      transportCO2.flight(watchedValues.flight_count || 0);
 
-    // 2. Home Energy emissions (kg/year)
-    const elecCO2 = (watchedValues.elec_units || 0) * 0.8 * 12;
-    const gasCO2 = (watchedValues.gas_liters || 0) * 2.0 * 12;
-    const waterCO2 = (watchedValues.water_buckets || 0) * 0.05 * 365;
-    const energyTotal = elecCO2 + gasCO2 + waterCO2;
+    const energyTotal =
+      energyCO2.electricity(watchedValues.elec_units || 0) +
+      energyCO2.gas(watchedValues.gas_liters || 0) +
+      energyCO2.water(watchedValues.water_buckets || 0);
 
-    // 3. Food emissions (kg/year)
-    let dietFactor = 0.85; // mixed default
-    if (watchedValues.food_type === 'vegetarian') dietFactor = 0.5;
-    if (watchedValues.food_type === 'non-vegetarian') dietFactor = 1.2;
-    const dietCO2 = (watchedValues.meals_per_day || 0) * dietFactor * 365;
-    const meatCO2 = (watchedValues.meat_kg || 0) * 12 * 12;
-    const foodTotal = dietCO2 + meatCO2;
+    const foodType = watchedValues.food_type as 'vegetarian' | 'non-vegetarian' | 'mixed';
+    const foodTotal =
+      foodCO2.mealsPerYear(watchedValues.meals_per_day || 0, foodType) +
+      foodCO2.meat(watchedValues.meat_kg || 0);
 
-    // 4. Shopping emissions (kg/year)
-    const onlineCO2 = (watchedValues.online_orders || 0) * 5 * 12;
-    const clothingCO2 = (watchedValues.clothing_items || 0) * 10 * 12;
-    const electronicsCO2 = (watchedValues.electronics_count || 0) * 80;
-    const wasteCO2 = (watchedValues.food_waste_pct || 0) * 2 * 12;
-    const shoppingTotal = onlineCO2 + clothingCO2 + electronicsCO2 + wasteCO2;
+    const shoppingTotal =
+      shoppingCO2.online(watchedValues.online_orders || 0) +
+      shoppingCO2.clothing(watchedValues.clothing_items || 0) +
+      shoppingCO2.electronics(watchedValues.electronics_count || 0) +
+      shoppingCO2.waste(watchedValues.food_waste_pct || 0);
 
-    const total = transportTotal + energyTotal + foodTotal + shoppingTotal;
+    const digitalTotal =
+      digitalCO2.streaming(watchedValues.streaming_hours || 0) +
+      digitalCO2.cloud(watchedValues.cloud_gb || 0) +
+      digitalCO2.email(watchedValues.email_count || 0) +
+      digitalCO2.calls(watchedValues.call_hours || 0) +
+      digitalCO2.social(watchedValues.social_hours || 0);
+
+    const total =
+      transportTotal + energyTotal + foodTotal + shoppingTotal + digitalTotal + cashTotal;
 
     setEmissions({
       transport: Math.round(transportTotal),
       energy: Math.round(energyTotal),
       food: Math.round(foodTotal),
       shopping: Math.round(shoppingTotal),
-      total: Math.round(total)
+      digital: Math.round(digitalTotal),
+      cash: Math.round(cashTotal),
+      total: Math.round(total),
     });
-  }, [watchedValues]);
+  }, [watchedValues, cashTotal]);
 
   // Determine indicator color
   const getIndicator = () => {
@@ -196,7 +260,14 @@ export const Calculator: React.FC = () => {
         { category: 'shopping', subcategory: 'online', value: data.online_orders, unit: 'orders/month', co2_emission: data.online_orders * 5 * 12, created_at: nowStr },
         { category: 'shopping', subcategory: 'clothing', value: data.clothing_items, unit: 'items/month', co2_emission: data.clothing_items * 10 * 12, created_at: nowStr },
         { category: 'shopping', subcategory: 'electronics', value: data.electronics_count, unit: 'devices/year', co2_emission: data.electronics_count * 80, created_at: nowStr },
-        { category: 'shopping', subcategory: 'waste', value: data.food_waste_pct, unit: 'waste_pct', co2_emission: data.food_waste_pct * 2 * 12, created_at: nowStr }
+        { category: 'shopping', subcategory: 'waste', value: data.food_waste_pct, unit: 'waste_pct', co2_emission: data.food_waste_pct * 2 * 12, created_at: nowStr },
+
+        // Digital
+        { category: 'digital', subcategory: 'streaming', value: data.streaming_hours, unit: 'hours/month', co2_emission: digitalCO2.streaming(data.streaming_hours), created_at: nowStr },
+        { category: 'digital', subcategory: 'cloud', value: data.cloud_gb, unit: 'GB', co2_emission: digitalCO2.cloud(data.cloud_gb), created_at: nowStr },
+        { category: 'digital', subcategory: 'email', value: data.email_count, unit: 'emails/day', co2_emission: digitalCO2.email(data.email_count), created_at: nowStr },
+        { category: 'digital', subcategory: 'calls', value: data.call_hours, unit: 'hours/month', co2_emission: digitalCO2.calls(data.call_hours), created_at: nowStr },
+        { category: 'digital', subcategory: 'social', value: data.social_hours, unit: 'hours/day', co2_emission: digitalCO2.social(data.social_hours), created_at: nowStr },
       ];
 
       // Remove zero-emission mock entries to keep DB clean, keeping only non-zeroes or key inputs
@@ -232,11 +303,51 @@ export const Calculator: React.FC = () => {
     }
   };
 
+  const onAddCashTransaction = async (data: CashFormInput) => {
+    if (!user) return;
+    setCashSaving(true);
+    setErrorMsg(null);
+    const co2 = cashTransactionCO2(data.category, data.amount);
+    try {
+      const { data: inserted, error } = await supabase.from('cash_transactions').insert([
+        {
+          user_id: user.id,
+          category: data.category,
+          amount: data.amount,
+          transaction_date: data.transaction_date,
+          receipt_url: data.receipt_url || null,
+          co2_emission: co2,
+        },
+      ]);
+      if (error) throw error;
+      const newTx = inserted?.[0] ?? {
+        id: crypto.randomUUID(),
+        category: data.category,
+        amount: data.amount,
+        transaction_date: data.transaction_date,
+        co2_emission: co2,
+      };
+      setCashTransactions((prev) => [newTx, ...prev].slice(0, 10));
+      cashForm.reset({
+        category: 'food',
+        amount: 0,
+        transaction_date: new Date().toISOString().split('T')[0],
+        receipt_url: '',
+      });
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to save transaction.');
+    } finally {
+      setCashSaving(false);
+    }
+  };
+
   const tabs = [
-    { id: 'transport' as TabId, label: 'Transportation', icon: Car },
-    { id: 'energy' as TabId, label: 'Home Energy', icon: Zap },
-    { id: 'food' as TabId, label: 'Food & Diet', icon: Apple },
-    { id: 'shopping' as TabId, label: 'Shopping', icon: ShoppingBag }
+    { id: 'transport' as TabId, label: 'Transport', icon: Car },
+    { id: 'energy' as TabId, label: 'Energy', icon: Zap },
+    { id: 'food' as TabId, label: 'Food', icon: Apple },
+    { id: 'shopping' as TabId, label: 'Shopping', icon: ShoppingBag },
+    { id: 'digital' as TabId, label: 'Digital', icon: Monitor },
+    { id: 'cash' as TabId, label: 'Cash', icon: Wallet },
   ];
 
   return (
@@ -450,7 +561,108 @@ export const Calculator: React.FC = () => {
                     <ArrowLeft className="w-4 h-4" />
                     <span>Back</span>
                   </button>
+                  <button type="button" onClick={() => setActiveTab('digital')} className="flex items-center space-x-2 px-5 py-2.5 bg-forest-600 text-white font-bold rounded-xl hover:bg-forest-700 transition cursor-pointer">
+                    <span>Next: Digital</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
 
+            {/* Tab 5: Digital Footprint */}
+            {activeTab === 'digital' && (
+              <div className="space-y-6 animate-fade-in">
+                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 border-l-4 border-forest-500 pl-3">
+                  Digital Footprint
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-slate-600 dark:text-slate-300">Streaming (hours/month)</label>
+                    <input type="number" step="any" className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-forest-500" {...register('streaming_hours')} />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-slate-600 dark:text-slate-300">Cloud storage (GB)</label>
+                    <input type="number" step="any" className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-forest-500" {...register('cloud_gb')} />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-slate-600 dark:text-slate-300">Emails sent (per day)</label>
+                    <input type="number" className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-forest-500" {...register('email_count')} />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-slate-600 dark:text-slate-300">Video calls (hours/month)</label>
+                    <input type="number" step="any" className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-forest-500" {...register('call_hours')} />
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <label className="text-sm font-semibold text-slate-600 dark:text-slate-300">Social media (hours/day)</label>
+                    <input type="number" step="any" className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-forest-500" {...register('social_hours')} />
+                  </div>
+                </div>
+                <div className="flex justify-between pt-4">
+                  <button type="button" onClick={() => setActiveTab('shopping')} className="flex items-center space-x-2 px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-50 dark:hover:bg-slate-850 cursor-pointer">
+                    <ArrowLeft className="w-4 h-4" />
+                    <span>Back</span>
+                  </button>
+                  <button type="button" onClick={() => setActiveTab('cash')} className="flex items-center space-x-2 px-5 py-2.5 bg-forest-600 text-white font-bold rounded-xl hover:bg-forest-700 transition cursor-pointer">
+                    <span>Next: Cash</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Tab 6: Cash Transactions */}
+            {activeTab === 'cash' && (
+              <div className="space-y-6 animate-fade-in">
+                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 border-l-4 border-forest-500 pl-3">
+                  Cash Transactions
+                </h3>
+                <form onSubmit={cashForm.handleSubmit(onAddCashTransaction)} className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-slate-600 dark:text-slate-300">Category</label>
+                    <select className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-forest-500 font-semibold" {...cashForm.register('category')}>
+                      {Object.keys(cashCategoryFactors).map((cat) => (
+                        <option key={cat} value={cat}>{cat.charAt(0).toUpperCase() + cat.slice(1)}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-slate-600 dark:text-slate-300">Amount (₹)</label>
+                    <input type="number" step="any" className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-forest-500" {...cashForm.register('amount')} />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-slate-600 dark:text-slate-300">Date</label>
+                    <input type="date" className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-forest-500" {...cashForm.register('transaction_date')} />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-slate-600 dark:text-slate-300">Receipt URL (optional)</label>
+                    <input type="text" placeholder="https://..." className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-forest-500" {...cashForm.register('receipt_url')} />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <button type="submit" disabled={cashSaving} className="flex items-center space-x-2 px-5 py-2.5 bg-sky-primary hover:bg-sky-dark text-white font-bold rounded-xl transition cursor-pointer">
+                      {cashSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wallet className="w-4 h-4" />}
+                      <span>Add Transaction</span>
+                    </button>
+                  </div>
+                </form>
+                {cashTransactions.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-bold text-slate-600 dark:text-slate-300">Recent Transactions</h4>
+                    {cashTransactions.map((tx) => (
+                      <div key={tx.id} className="flex justify-between items-center p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
+                        <div>
+                          <span className="text-sm font-bold capitalize text-slate-700 dark:text-slate-300">{tx.category}</span>
+                          <span className="text-xs text-slate-400 ml-2">₹{Number(tx.amount).toLocaleString()}</span>
+                        </div>
+                        <span className="text-sm font-bold text-forest-600">{Math.round(tx.co2_emission)} kg CO₂</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex justify-between pt-4">
+                  <button type="button" onClick={() => setActiveTab('digital')} className="flex items-center space-x-2 px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-50 dark:hover:bg-slate-850 cursor-pointer">
+                    <ArrowLeft className="w-4 h-4" />
+                    <span>Back</span>
+                  </button>
                   <button
                     type="submit"
                     disabled={saveLoading || saveSuccess}
@@ -464,12 +676,12 @@ export const Calculator: React.FC = () => {
                     ) : saveSuccess ? (
                       <>
                         <Check className="w-4 h-4 text-white" />
-                        <span>Saved Successfully!</span>
+                        <span>Saved!</span>
                       </>
                     ) : (
                       <>
                         <Save className="w-4 h-4" />
-                        <span>Save to Database</span>
+                        <span>Save All & View Dashboard</span>
                       </>
                     )}
                   </button>
@@ -543,6 +755,20 @@ export const Calculator: React.FC = () => {
                   <span className="text-slate-500">Shopping & Waste</span>
                 </div>
                 <span>{emissions.shopping.toLocaleString()} kg/yr</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <div className="flex items-center space-x-2">
+                  <span className="w-3 h-3 rounded-full bg-violet-500"></span>
+                  <span className="text-slate-500">Digital</span>
+                </div>
+                <span>{emissions.digital.toLocaleString()} kg/yr</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <div className="flex items-center space-x-2">
+                  <span className="w-3 h-3 rounded-full bg-indigo-500"></span>
+                  <span className="text-slate-500">Cash Spending</span>
+                </div>
+                <span>{emissions.cash.toLocaleString()} kg/yr</span>
               </div>
             </div>
 

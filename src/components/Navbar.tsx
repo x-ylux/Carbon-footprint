@@ -15,7 +15,9 @@ import {
   Sun, 
   Moon,
   Database,
-  User as UserIcon
+  User as UserIcon,
+  Users,
+  Info
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -60,7 +62,14 @@ export const Navbar: React.FC = () => {
               <Home className="w-4 h-4" />
               <span>Home</span>
             </Link>
-            
+            <Link to="/about" className={linkClass('/about')}>
+              <Info className="w-4 h-4" />
+              <span>About</span>
+            </Link>
+            <Link to="/collective" className={linkClass('/collective')}>
+              <Users className="w-4 h-4" />
+              <span>Collective</span>
+            </Link>
             {user && (
               <>
                 <Link to="/dashboard" className={linkClass('/dashboard')}>
@@ -169,6 +178,22 @@ export const Navbar: React.FC = () => {
             >
               <Home className="w-5 h-5" />
               <span>Home</span>
+            </Link>
+            <Link 
+              to="/about" 
+              className={mobileLinkClass('/about')}
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <Info className="w-5 h-5" />
+              <span>About</span>
+            </Link>
+            <Link 
+              to="/collective" 
+              className={mobileLinkClass('/collective')}
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <Users className="w-5 h-5" />
+              <span>Collective Action</span>
             </Link>
 
             {user && (
