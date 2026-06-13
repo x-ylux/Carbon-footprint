@@ -1,20 +1,16 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
+import type { Database } from '../types/supabase';
 import { supabase } from '../lib/supabaseClient';
 
-interface Profile {
-  id: string;
-  email: string;
-  name: string;
-  created_at: string;
-}
+type Profile = Database['public']['Tables']['users']['Row'];
 
 interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
-  signUp: (email: string, password: string, name: string) => Promise<{ error: any; needsVerification?: boolean }>;
+  signUp: (email: string, password: string, name: string) => Promise<{ error: any; needsVerification: boolean | null }>;
   signOut: () => Promise<{ error: any }>;
 }
 
@@ -42,7 +38,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             id: userId,
             email: user.email || '',
             name: user.user_metadata?.name || user.email?.split('@')[0] || 'User',
-            created_at: user.created_at || new Date().toISOString()
+            country: null,
+            target_budget: null,
+            created_at: user.created_at || new Date().toISOString(),
           });
         }
       } else {

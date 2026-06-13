@@ -16,9 +16,9 @@ import {
 interface CollectiveEvent {
   id: string;
   title: string;
-  description: string;
+  description: string | null;
   event_date: string;
-  location: string;
+  location: string | null;
   participants_count: number;
   co2_impact_kg: number;
 }
@@ -26,7 +26,7 @@ interface CollectiveEvent {
 interface GroupChallenge {
   id: string;
   title: string;
-  description: string;
+  description: string | null;
   target_kg: number;
   current_kg: number;
   participants_count: number;
@@ -135,8 +135,12 @@ export const CollectiveAction: React.FC = () => {
           .select('*')
           .order('end_date', { ascending: true });
 
-        const evts = eventsData?.length ? eventsData : MOCK_EVENTS;
-        const chls = challengesData?.length ? challengesData : MOCK_CHALLENGES;
+        const evts: CollectiveEvent[] = Array.isArray(eventsData)
+          ? (eventsData as CollectiveEvent[])
+          : MOCK_EVENTS;
+        const chls: GroupChallenge[] = Array.isArray(challengesData)
+          ? (challengesData as GroupChallenge[])
+          : MOCK_CHALLENGES;
 
         setEvents(evts);
         setChallenges(chls);

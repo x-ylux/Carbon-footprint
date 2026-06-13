@@ -41,13 +41,13 @@ export type EmissionSummary = {
   total: number;
 };
 
-export const useCarbonAccounting = (values: CalculatorFormInput, cashTotal: number) => {
+export const useCarbonAccounting = (values: CalculatorInputValues, cashTotal: number) => {
   return useMemo<EmissionSummary>(() => {
     const transport =
       transportCO2.car(values.car_km) +
       transportCO2.bus(values.bus_days) +
       transportCO2.metro(values.metro_km) +
-      transportCO2.bike(values.bike_km) +
+      transportCO2.bike() +
       transportCO2.flight(values.flight_count);
 
     const energy =
@@ -111,7 +111,7 @@ export const getCarbonIndicator = (total: number) => {
   };
 };
 
-export const buildCarbonEntryPayloads = (values: CalculatorFormInput, baseDate: string) => {
+export const buildCarbonEntryPayloads = (values: CalculatorInputValues, baseDate: string) => {
   const payloads = [
     {
       category: 'transportation',
