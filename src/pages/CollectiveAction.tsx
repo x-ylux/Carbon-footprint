@@ -295,9 +295,10 @@ export const CollectiveAction: React.FC = () => {
                     {challenge.description}
                   </p>
                   <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2.5 mb-3 overflow-hidden">
+                    {/* eslint-disable-next-line */}
                     <div
-                      className="h-full rounded-full bg-gradient-to-r from-forest-500 to-sky-primary transition-all duration-500"
-                      style={{ width: `${progress}%` }}
+                      className="h-full rounded-full bg-gradient-to-r from-forest-500 to-sky-primary transition-all duration-500 w-[var(--progress-width)]"
+                      style={{ '--progress-width': `${progress}%` } as React.CSSProperties}
                     />
                   </div>
                   <div className="flex justify-between text-xs font-semibold text-slate-400 mb-4">

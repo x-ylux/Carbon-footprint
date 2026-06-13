@@ -30,7 +30,7 @@ export const Home: React.FC = () => {
           {/* Left Hero Column */}
           <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
             <div className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-full bg-forest-100/60 dark:bg-forest-900/40 text-forest-700 dark:text-forest-400 text-xs font-semibold border border-forest-200/50 dark:border-forest-800/40 animate-fade-in">
-              <Sparkles className="w-3.5 h-3.5 text-forest-500 animate-spin" style={{ animationDuration: '6s' }} />
+              <Sparkles className="w-3.5 h-3.5 text-forest-500 animate-spin duration-[6s]" />
               <span>Real-Time Carbon Tracking & Analytics</span>
             </div>
             
@@ -105,7 +105,7 @@ export const Home: React.FC = () => {
             <div className="relative w-80 h-80 sm:w-96 sm:h-96 md:w-[450px] md:h-[450px] flex items-center justify-center animate-float">
               
               {/* Spinning Ring */}
-              <div className="absolute inset-0 rounded-full border-2 border-dashed border-forest-300/30 dark:border-forest-700/30 animate-spin" style={{ animationDuration: '40s' }}></div>
+              <div className="absolute inset-0 rounded-full border-2 border-dashed border-forest-300/30 dark:border-forest-700/30 animate-spin duration-[40s]"></div>
               
               {/* Outer floating cards */}
               <div className="absolute top-8 left-0 p-4 bg-white dark:bg-slate-900 rounded-2xl shadow-xl shadow-slate-100 dark:shadow-none border border-slate-100 dark:border-slate-800 flex items-center space-x-3 w-48 transition-all duration-300 hover:-translate-y-1">

@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '../types/supabase';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabaseClient';
 import { Link } from 'react-router-dom';
@@ -41,6 +43,7 @@ interface CarbonEntry {
 
 export const Dashboard: React.FC = () => {
   const { user } = useAuth();
+  const db = supabase as unknown as SupabaseClient<Database>;
   const [entries, setEntries] = useState<CarbonEntry[]>([]);
   const [goal, setGoal] = useState<number>(3000); // Default 3000 kg CO2/year
   const [loading, setLoading] = useState(true);
@@ -70,15 +73,16 @@ export const Dashboard: React.FC = () => {
       setEntries(entriesData || []);
 
       // Fetch Goal
-      const { data: goalData, error: goalError } = await supabase
+      const goalResult = await db
         .from('goals')
         .select('annual_limit')
         .eq('user_id', user.id)
         .single();
+      const goalData = goalResult.data as unknown as { annual_limit: number } | null;
 
-      if (goalError && goalError.message !== 'JSON object requested, multiple rows (or no rows) were returned') {
+      if (goalResult.error && goalResult.error.message !== 'JSON object requested, multiple rows (or no rows) were returned') {
         // Ignorable if no rows, but log others
-        console.error('Goal fetch error:', goalError);
+        console.error('Goal fetch error:', goalResult.error);
       }
 
       if (goalData) {
@@ -86,12 +90,13 @@ export const Dashboard: React.FC = () => {
         setGoalInput(String(goalData.annual_limit));
       }
 
-      const { data: budgetData } = await supabase
+      const budgetResult = await db
         .from('budgets')
-        .select('*')
+        .select('monthly_limit, spent')
         .eq('user_id', user.id)
         .eq('month_year', currentMonthKey)
         .single();
+      const budgetData = budgetResult.data as unknown as { monthly_limit: number; spent: number } | null;
 
       if (budgetData) {
         setBudgetLimit(Number(budgetData.monthly_limit));
@@ -99,10 +104,11 @@ export const Dashboard: React.FC = () => {
         setBudgetInput(String(budgetData.monthly_limit));
       }
 
-      const { data: cashData } = await supabase
+      const cashDataResult = await db
         .from('cash_transactions')
         .select('co2_emission, transaction_date')
         .eq('user_id', user.id);
+      const cashData = cashDataResult.data as unknown as Array<{ co2_emission: number; transaction_date: string }> | null;
 
       if (cashData?.length) {
         const monthCash = cashData.filter((t: { transaction_date: string }) => {
@@ -154,12 +160,14 @@ export const Dashboard: React.FC = () => {
       return;
     }
     try {
-      const { error } = await supabase.from('budgets').upsert({
-        user_id: user.id,
-        monthly_limit: val,
-        month_year: currentMonthKey,
-        spent: budgetSpent,
-      });
+      const { error } = await db
+        .from('budgets')
+        .upsert({
+          user_id: user.id,
+          monthly_limit: val,
+          month_year: currentMonthKey,
+          spent: budgetSpent,
+        });
       if (error) throw error;
       setBudgetLimit(val);
     } catch (err: any) {
@@ -183,7 +191,7 @@ export const Dashboard: React.FC = () => {
     }
 
     try {
-      const { error } = await supabase
+      const { error } = await db
         .from('goals')
         .upsert({ user_id: user.id, annual_limit: val });
 
@@ -509,9 +517,10 @@ export const Dashboard: React.FC = () => {
           {/* Progress bar */}
           <div className="mt-4 space-y-1.5">
             <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden">
-              <div 
-                className={`h-full rounded-full transition-all duration-500 ${getProgressBarColor()}`}
-                style={{ width: `${progressPercent}%` }}
+              {/* eslint-disable-next-line */}
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${getProgressBarColor()} w-[var(--progress-width)]`}
+                style={{ '--progress-width': `${progressPercent}%` } as React.CSSProperties}
               ></div>
             </div>
             <div className="flex justify-between text-2xs font-bold text-slate-400 uppercase tracking-wider">
@@ -623,15 +632,22 @@ export const Dashboard: React.FC = () => {
                 <span className="text-slate-800 dark:text-white">{Math.round(budgetSpent)} / {budgetLimit} kg</span>
               </div>
               <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-3 overflow-hidden">
+                {/* eslint-disable-next-line */}
                 <div
-                  className={`h-full rounded-full transition-all duration-500 ${budgetPercent >= 100 ? 'bg-rose-500' : budgetPercent >= 75 ? 'bg-amber-500' : 'bg-sky-primary'}`}
-                  style={{ width: `${budgetPercent}%` }}
+                  className={`h-full rounded-full transition-all duration-500 ${budgetPercent >= 100 ? 'bg-rose-500' : budgetPercent >= 75 ? 'bg-amber-500' : 'bg-sky-primary'} w-[var(--progress-width)]`}
+                  style={{ '--progress-width': `${budgetPercent}%` } as React.CSSProperties}
                 />
               </div>
             </div>
             <form onSubmit={handleUpdateBudget} className="space-y-3">
+              <label htmlFor="dashboard-budget-input" className="sr-only">
+                Monthly carbon budget
+              </label>
               <input
+                id="dashboard-budget-input"
                 type="number"
+                aria-label="Monthly carbon budget"
+                placeholder="Monthly carbon budget"
                 value={budgetInput}
                 onChange={(e) => setBudgetInput(e.target.value)}
                 className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-sky-primary font-bold"
@@ -684,10 +700,13 @@ export const Dashboard: React.FC = () => {
             
             <form onSubmit={handleUpdateGoal} className="space-y-4">
               <div className="space-y-1">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Limit Target (kg CO₂e/yr)</label>
+                <label htmlFor="dashboard-goal-input" className="text-xs font-bold uppercase tracking-wider text-slate-400">Limit Target (kg CO₂e/yr)</label>
                 <div className="relative">
                   <input 
+                    id="dashboard-goal-input"
                     type="number" 
+                    aria-label="Annual carbon limit target"
+                    placeholder="Enter annual carbon limit"
                     value={goalInput}
                     onChange={(e) => setGoalInput(e.target.value)}
                     className="w-full pl-4 pr-16 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-forest-500 font-bold" 
@@ -705,6 +724,8 @@ export const Dashboard: React.FC = () => {
                   min="500" 
                   max="10000" 
                   step="100"
+                  title="Adjust annual carbon limit"
+                  aria-label="Adjust annual carbon limit"
                   value={goalInput}
                   onChange={(e) => {
                     setGoalInput(e.target.value);
@@ -772,6 +793,8 @@ export const Dashboard: React.FC = () => {
                     </div>
                     
                     <button 
+                      type="button"
+                      aria-label="Delete log entry"
                       onClick={() => handleDeleteEntry(entry.id)}
                       className="p-1 rounded bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white transition duration-150 cursor-pointer md:opacity-0 group-hover:opacity-100"
                     >

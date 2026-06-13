@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch, type SubmitHandler, type Resolver } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigate } from 'react-router-dom';
@@ -91,7 +91,7 @@ export const Calculator: React.FC = () => {
   const [cashSaving, setCashSaving] = useState(false);
 
   const cashForm = useForm<CashFormInput>({
-    resolver: zodResolver(cashSchema) as any,
+    resolver: zodResolver(cashSchema) as Resolver<CashFormInput>,
     defaultValues: {
       category: 'food',
       amount: 0,
@@ -103,10 +103,10 @@ export const Calculator: React.FC = () => {
   const {
     register,
     handleSubmit,
-    watch,
+    control,
     formState: { errors }
   } = useForm<CalculatorFormInput>({
-    resolver: zodResolver(calculatorSchema) as any,
+    resolver: zodResolver(calculatorSchema) as Resolver<CalculatorFormInput>,
     defaultValues: {
       car_km: 0,
       bus_days: 0,
@@ -131,6 +131,8 @@ export const Calculator: React.FC = () => {
     },
   });
 
+  const watchedValues = useWatch({ control }) as CalculatorFormInput;
+
   useEffect(() => {
     if (!user) return;
     supabase
@@ -142,9 +144,6 @@ export const Calculator: React.FC = () => {
         if (data) setCashTransactions(data.slice(0, 10));
       });
   }, [user]);
-
-  // Watch values for real-time calculation
-  const watchedValues = watch();
 
   // Calculation state
   const [emissions, setEmissions] = useState({
@@ -158,6 +157,51 @@ export const Calculator: React.FC = () => {
   });
 
   const cashTotal = cashTransactions.reduce((s, t) => s + Number(t.co2_emission), 0);
+
+  // Recalculate emissions whenever watched values or cash totals change
+  useEffect(() => {
+    const transportTotal =
+      transportCO2.car(watchedValues.car_km || 0) +
+      transportCO2.bus(watchedValues.bus_days || 0) +
+      transportCO2.metro(watchedValues.metro_km || 0) +
+      transportCO2.bike() +
+      transportCO2.flight(watchedValues.flight_count || 0);
+
+    const energyTotal =
+      energyCO2.electricity(watchedValues.elec_units || 0) +
+      energyCO2.gas(watchedValues.gas_liters || 0) +
+      energyCO2.water(watchedValues.water_buckets || 0);
+
+    const foodType = watchedValues.food_type as 'vegetarian' | 'non-vegetarian' | 'mixed';
+    const foodTotal =
+      foodCO2.mealsPerYear(watchedValues.meals_per_day || 0, foodType) +
+      foodCO2.meat(watchedValues.meat_kg || 0);
+
+    const shoppingTotal =
+      shoppingCO2.online(watchedValues.online_orders || 0) +
+      shoppingCO2.clothing(watchedValues.clothing_items || 0) +
+      shoppingCO2.electronics(watchedValues.electronics_count || 0) +
+      shoppingCO2.waste(watchedValues.food_waste_pct || 0);
+
+    const digitalTotal =
+      digitalCO2.streaming(watchedValues.streaming_hours || 0) +
+      digitalCO2.cloud(watchedValues.cloud_gb || 0) +
+      digitalCO2.email(watchedValues.email_count || 0) +
+      digitalCO2.calls(watchedValues.call_hours || 0) +
+      digitalCO2.social(watchedValues.social_hours || 0);
+
+    const total = transportTotal + energyTotal + foodTotal + shoppingTotal + digitalTotal + cashTotal;
+
+    setEmissions({
+      transport: Math.round(transportTotal),
+      energy: Math.round(energyTotal),
+      food: Math.round(foodTotal),
+      shopping: Math.round(shoppingTotal),
+      digital: Math.round(digitalTotal),
+      cash: Math.round(cashTotal),
+      total: Math.round(total),
+    });
+  }, [watchedValues, cashTotal]);
 
   const parseReceiptText = () => {
     setReceiptParseMessage(null);
@@ -191,51 +235,6 @@ export const Calculator: React.FC = () => {
     );
   };
 
-  useEffect(() => {
-    const transportTotal =
-      transportCO2.car(watchedValues.car_km || 0) +
-      transportCO2.bus(watchedValues.bus_days || 0) +
-      transportCO2.metro(watchedValues.metro_km || 0) +
-      transportCO2.bike() +
-      transportCO2.flight(watchedValues.flight_count || 0);
-
-    const energyTotal =
-      energyCO2.electricity(watchedValues.elec_units || 0) +
-      energyCO2.gas(watchedValues.gas_liters || 0) +
-      energyCO2.water(watchedValues.water_buckets || 0);
-
-    const foodType = watchedValues.food_type as 'vegetarian' | 'non-vegetarian' | 'mixed';
-    const foodTotal =
-      foodCO2.mealsPerYear(watchedValues.meals_per_day || 0, foodType) +
-      foodCO2.meat(watchedValues.meat_kg || 0);
-
-    const shoppingTotal =
-      shoppingCO2.online(watchedValues.online_orders || 0) +
-      shoppingCO2.clothing(watchedValues.clothing_items || 0) +
-      shoppingCO2.electronics(watchedValues.electronics_count || 0) +
-      shoppingCO2.waste(watchedValues.food_waste_pct || 0);
-
-    const digitalTotal =
-      digitalCO2.streaming(watchedValues.streaming_hours || 0) +
-      digitalCO2.cloud(watchedValues.cloud_gb || 0) +
-      digitalCO2.email(watchedValues.email_count || 0) +
-      digitalCO2.calls(watchedValues.call_hours || 0) +
-      digitalCO2.social(watchedValues.social_hours || 0);
-
-    const total =
-      transportTotal + energyTotal + foodTotal + shoppingTotal + digitalTotal + cashTotal;
-
-    setEmissions({
-      transport: Math.round(transportTotal),
-      energy: Math.round(energyTotal),
-      food: Math.round(foodTotal),
-      shopping: Math.round(shoppingTotal),
-      digital: Math.round(digitalTotal),
-      cash: Math.round(cashTotal),
-      total: Math.round(total),
-    });
-  }, [watchedValues, cashTotal]);
-
   // Determine indicator color
   const getIndicator = () => {
     const total = emissions.total;
@@ -266,7 +265,7 @@ export const Calculator: React.FC = () => {
   const indicator = getIndicator();
 
   // Save to database
-  const onSave = async (data: CalculatorFormInput) => {
+  const onSave: SubmitHandler<CalculatorFormInput> = async (data) => {
     if (!user) return;
     setSaveLoading(true);
     setErrorMsg(null);
@@ -305,7 +304,7 @@ export const Calculator: React.FC = () => {
       ];
 
       const nonZeroRows = insertRows.filter(r => r.value > 0 || r.subcategory === 'diet_type');
-      const { data: inserted, error } = await supabase.rpc('insert_carbon_entries', {
+      const { error } = await supabase.rpc('insert_carbon_entries', {
         entries: JSON.stringify(nonZeroRows),
       });
 
@@ -324,15 +323,16 @@ export const Calculator: React.FC = () => {
         navigate('/dashboard');
       }, 1500);
 
-    } catch (err: any) {
-      console.error(err);
-      setErrorMsg(err.message || 'Failed to sync data with the database.');
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error('Failed to sync data with the database.');
+      console.error(error);
+      setErrorMsg(error.message || 'Failed to sync data with the database.');
     } finally {
       setSaveLoading(false);
     }
   };
 
-  const onAddCashTransaction = async (data: CashFormInput) => {
+  const onAddCashTransaction: SubmitHandler<CashFormInput> = async (data) => {
     if (!user) return;
     setCashSaving(true);
     setErrorMsg(null);
@@ -361,8 +361,9 @@ export const Calculator: React.FC = () => {
         receipt_url: '',
       });
       setReceiptParseMessage(null);
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to save transaction.');
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error('Failed to save transaction.');
+      setErrorMsg(error.message || 'Failed to save transaction.');
     } finally {
       setCashSaving(false);
     }
@@ -418,7 +419,7 @@ export const Calculator: React.FC = () => {
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit(onSave as any)} className="space-y-8">
+          <form onSubmit={handleSubmit(onSave)} className="space-y-8">
             
             {/* Tab 1: Transportation */}
             {activeTab === 'transport' && (
@@ -765,13 +766,14 @@ export const Calculator: React.FC = () => {
             <div className="flex flex-col items-center py-4 border-b border-slate-100 dark:border-slate-800">
               <div className="w-40 h-40 rounded-full border-8 border-slate-100 dark:border-slate-850 flex flex-col items-center justify-center relative shadow-inner">
                 {/* Active Colored Ring Segment */}
-                <div 
-                  className={`absolute inset-0 rounded-full border-8 border-transparent transition-all duration-500`}
-                  style={{
-                    borderColor: emissions.total < 1600 ? '#52b788' : emissions.total <= 3000 ? '#f59e0b' : '#f43f5e',
-                    clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0% 100%)',
-                    transform: 'rotate(0deg)'
-                  }}
+                <div
+                  className={`absolute inset-0 rounded-full border-8 transition-all duration-500 ${
+                    emissions.total < 1600
+                      ? 'border-emerald-500'
+                      : emissions.total <= 3000
+                      ? 'border-amber-500'
+                      : 'border-rose-500'
+                  }`}
                 ></div>
                 <span className="text-3xl font-black text-slate-800 dark:text-white leading-none">
                   {emissions.total.toLocaleString()}

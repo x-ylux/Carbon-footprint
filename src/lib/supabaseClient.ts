@@ -17,8 +17,8 @@ if (!isSupabaseConfigured) {
 }
 
 // Create the standard Supabase client (only if configured)
-const realSupabase: SupabaseClient<Database> | null = isSupabaseConfigured 
-  ? createClient<Database>(supabaseUrl, supabaseAnonKey) 
+const realSupabase: SupabaseClient<Database, 'public', 'public'> | null = isSupabaseConfigured 
+  ? createClient<Database, 'public'>(supabaseUrl, supabaseAnonKey) 
   : null;
 
 // ==========================================
