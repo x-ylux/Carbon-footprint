@@ -401,6 +401,7 @@ export const Calculator: React.FC = () => {
               const TabIcon = tab.icon;
               return (
                 <button
+                  type="button"
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center space-x-2 pb-4 px-4 border-b-2 font-bold text-sm transition-all whitespace-nowrap cursor-pointer ${
@@ -643,7 +644,7 @@ export const Calculator: React.FC = () => {
                 <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 border-l-4 border-forest-500 pl-3">
                   Cash Transactions
                 </h3>
-                <form onSubmit={cashForm.handleSubmit(onAddCashTransaction)} className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-slate-600 dark:text-slate-300">Category</label>
                     <select className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-forest-500 font-semibold" {...cashForm.register('category')}>
@@ -688,12 +689,17 @@ export const Calculator: React.FC = () => {
                     </div>
                   </div>
                   <div className="sm:col-span-2">
-                    <button type="submit" disabled={cashSaving} className="flex items-center space-x-2 px-5 py-2.5 bg-sky-primary hover:bg-sky-dark text-white font-bold rounded-xl transition cursor-pointer">
+                    <button
+                      type="button"
+                      onClick={cashForm.handleSubmit(onAddCashTransaction)}
+                      disabled={cashSaving}
+                      className="flex items-center space-x-2 px-5 py-2.5 bg-sky-primary hover:bg-sky-dark text-white font-bold rounded-xl transition cursor-pointer"
+                    >
                       {cashSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wallet className="w-4 h-4" />}
                       <span>Add Transaction</span>
                     </button>
                   </div>
-                </form>
+                </div>
                 {cashTransactions.length > 0 && (
                   <div className="space-y-2">
                     <h4 className="text-sm font-bold text-slate-600 dark:text-slate-300">Recent Transactions</h4>
