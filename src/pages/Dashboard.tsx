@@ -1,6 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database } from '../types/supabase';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabaseClient';
 import { Link } from 'react-router-dom';
@@ -43,7 +41,8 @@ interface CarbonEntry {
 
 export const Dashboard: React.FC = () => {
   const { user } = useAuth();
-  const db = supabase as unknown as SupabaseClient<Database, 'public'>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db = supabase as unknown as any;
   const [entries, setEntries] = useState<CarbonEntry[]>([]);
   const [goal, setGoal] = useState<number>(3000); // Default 3000 kg CO2/year
   const [loading, setLoading] = useState(true);
@@ -58,12 +57,12 @@ export const Dashboard: React.FC = () => {
   const currentMonthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
 
   // Fetch carbon entries and goal limit
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     if (!user) return;
     setErrorMsg(null);
     try {
       // Fetch Entries
-      const { data: entriesData, error: entriesError } = await supabase
+      const { data: entriesData, error: entriesError } = await db
         .from('carbon_entries')
         .select('*')
         .eq('user_id', user.id)
@@ -125,7 +124,8 @@ export const Dashboard: React.FC = () => {
         const cashMonthTotal = monthCash.reduce((s: number, t: { co2_emission: number }) => s + Number(t.co2_emission), 0);
         setBudgetSpent((prev) => prev + cashMonthTotal);
       }
-    } catch (err: any) {
+    } catch (errorUnknown) {
+      const err = errorUnknown instanceof Error ? errorUnknown : new Error('Failed to load dashboard statistics.');
       console.error('Fetch dashboard data error:', err);
       setErrorMsg(err.message || 'Failed to load dashboard statistics.');
     } finally {
@@ -139,7 +139,7 @@ export const Dashboard: React.FC = () => {
     if (!user) return;
 
     // Real-time listener subscription
-    const channel = supabase
+    const channel = db
       .channel('dashboard-realtime')
       .on(
         'postgres_changes',
@@ -153,7 +153,7 @@ export const Dashboard: React.FC = () => {
     return () => {
       channel.unsubscribe();
     };
-  }, [user]);
+  }, [fetchData, user]);
 
   // Handle Goal Update
   const handleUpdateBudget = async (e: React.FormEvent) => {
@@ -177,7 +177,8 @@ export const Dashboard: React.FC = () => {
         });
       if (error) throw error;
       setBudgetLimit(val);
-    } catch (err: any) {
+    } catch (errorUnknown) {
+      const err = errorUnknown instanceof Error ? errorUnknown : new Error('Failed to update budget.');
       setErrorMsg(err.message || 'Failed to update budget.');
     } finally {
       setUpdatingBudget(false);
@@ -217,7 +218,8 @@ export const Dashboard: React.FC = () => {
         spread: 55,
         origin: { x: 1 }
       });
-    } catch (err: any) {
+    } catch (errorUnknown) {
+      const err = errorUnknown instanceof Error ? errorUnknown : new Error('Failed to update carbon limit.');
       console.error(err);
       setErrorMsg(err.message || 'Failed to update carbon limit.');
     } finally {
@@ -231,14 +233,15 @@ export const Dashboard: React.FC = () => {
     setErrorMsg(null);
 
     try {
-      const { error } = await supabase
+      const { error } = await db
         .from('carbon_entries')
         .delete()
         .eq('id', entryId);
 
       if (error) throw error;
       // State is updated automatically by the real-time channel
-    } catch (err: any) {
+    } catch (errorUnknown) {
+      const err = errorUnknown instanceof Error ? errorUnknown : new Error('Failed to delete record.');
       console.error(err);
       setErrorMsg(err.message || 'Failed to delete record.');
     }
@@ -367,12 +370,6 @@ export const Dashboard: React.FC = () => {
   const progressPercent = goal > 0 ? Math.min(Math.round((currentAnnualPacing / goal) * 100), 100) : 0;
 
   // Progress Bar styling color based on consumption
-  const getProgressBarColor = () => {
-    if (progressPercent < 75) return 'bg-emerald-500';
-    if (progressPercent < 100) return 'bg-amber-500';
-    return 'bg-rose-500 animate-pulse';
-  };
-
   if (loading) {
     return (
       <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center bg-forest-50/20 dark:bg-forest-950/10">
@@ -523,12 +520,14 @@ export const Dashboard: React.FC = () => {
           </div>
           {/* Progress bar */}
           <div className="mt-4 space-y-1.5">
-            <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden">
-              {/* eslint-disable-next-line */}
-              <div
-                className={`h-full rounded-full transition-all duration-500 ${getProgressBarColor()} w-[var(--progress-width)]`}
-                style={{ '--progress-width': `${progressPercent}%` } as React.CSSProperties}
-              ></div>
+            <div className="w-full rounded-full overflow-hidden">
+              <progress
+                className={`w-full h-2.5 appearance-none rounded-full ${
+                  progressPercent >= 100 ? 'accent-rose-500' : progressPercent >= 75 ? 'accent-amber-500' : 'accent-sky-primary'
+                }`}
+                value={progressPercent}
+                max={100}
+              />
             </div>
             <div className="flex justify-between text-2xs font-bold text-slate-400 uppercase tracking-wider">
               <span>0 kg</span>
@@ -638,11 +637,13 @@ export const Dashboard: React.FC = () => {
                 <span className="text-slate-500">Spent this month</span>
                 <span className="text-slate-800 dark:text-white">{Math.round(budgetSpent)} / {budgetLimit} kg</span>
               </div>
-              <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-3 overflow-hidden">
-                {/* eslint-disable-next-line */}
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ${budgetPercent >= 100 ? 'bg-rose-500' : budgetPercent >= 75 ? 'bg-amber-500' : 'bg-sky-primary'} w-[var(--progress-width)]`}
-                  style={{ '--progress-width': `${budgetPercent}%` } as React.CSSProperties}
+              <div className="w-full rounded-full overflow-hidden">
+                <progress
+                  className={`w-full h-3 appearance-none rounded-full ${
+                    budgetPercent >= 100 ? 'accent-rose-500' : budgetPercent >= 75 ? 'accent-amber-500' : 'accent-sky-primary'
+                  }`}
+                  value={budgetPercent}
+                  max={100}
                 />
               </div>
             </div>
