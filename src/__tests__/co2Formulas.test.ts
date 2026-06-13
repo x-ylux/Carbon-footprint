@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cashTransactionCO2, energyCO2, foodCO2, shoppingCO2, transportCO2 } from '../lib/co2Formulas';
+import { cashTransactionCO2, digitalCO2, energyCO2, foodCO2, shoppingCO2, transportCO2 } from '../lib/co2Formulas';
 
 describe('CO2 formula validation', () => {
   it('calculates car transport correctly', () => {
