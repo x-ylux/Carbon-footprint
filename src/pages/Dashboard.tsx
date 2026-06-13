@@ -43,7 +43,7 @@ interface CarbonEntry {
 
 export const Dashboard: React.FC = () => {
   const { user } = useAuth();
-  const db = supabase as unknown as SupabaseClient<Database>;
+  const db = supabase as unknown as SupabaseClient<Database, 'public'>;
   const [entries, setEntries] = useState<CarbonEntry[]>([]);
   const [goal, setGoal] = useState<number>(3000); // Default 3000 kg CO2/year
   const [loading, setLoading] = useState(true);
@@ -78,16 +78,17 @@ export const Dashboard: React.FC = () => {
         .select('annual_limit')
         .eq('user_id', user.id)
         .single();
-      const goalData = goalResult.data as unknown as { annual_limit: number } | null;
+      const goalData = goalResult.data as unknown;
 
       if (goalResult.error && goalResult.error.message !== 'JSON object requested, multiple rows (or no rows) were returned') {
         // Ignorable if no rows, but log others
         console.error('Goal fetch error:', goalResult.error);
       }
 
-      if (goalData) {
-        setGoal(Number(goalData.annual_limit));
-        setGoalInput(String(goalData.annual_limit));
+      if (goalData && typeof goalData === 'object' && 'annual_limit' in goalData) {
+        const parsedGoalData = goalData as { annual_limit: number };
+        setGoal(Number(parsedGoalData.annual_limit));
+        setGoalInput(String(parsedGoalData.annual_limit));
       }
 
       const budgetResult = await db
@@ -96,12 +97,18 @@ export const Dashboard: React.FC = () => {
         .eq('user_id', user.id)
         .eq('month_year', currentMonthKey)
         .single();
-      const budgetData = budgetResult.data as unknown as { monthly_limit: number; spent: number } | null;
+      const budgetData = budgetResult.data as unknown;
 
-      if (budgetData) {
-        setBudgetLimit(Number(budgetData.monthly_limit));
-        setBudgetSpent(Number(budgetData.spent));
-        setBudgetInput(String(budgetData.monthly_limit));
+      if (
+        budgetData &&
+        typeof budgetData === 'object' &&
+        'monthly_limit' in budgetData &&
+        'spent' in budgetData
+      ) {
+        const parsedBudgetData = budgetData as { monthly_limit: number; spent: number };
+        setBudgetLimit(Number(parsedBudgetData.monthly_limit));
+        setBudgetSpent(Number(parsedBudgetData.spent));
+        setBudgetInput(String(parsedBudgetData.monthly_limit));
       }
 
       const cashDataResult = await db

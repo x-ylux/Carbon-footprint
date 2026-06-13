@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useForm, useWatch, type SubmitHandler, type Resolver } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -145,21 +145,9 @@ export const Calculator: React.FC = () => {
       });
   }, [user]);
 
-  // Calculation state
-  const [emissions, setEmissions] = useState({
-    transport: 0,
-    energy: 0,
-    food: 0,
-    shopping: 0,
-    digital: 0,
-    cash: 0,
-    total: 0,
-  });
-
   const cashTotal = cashTransactions.reduce((s, t) => s + Number(t.co2_emission), 0);
 
-  // Recalculate emissions whenever watched values or cash totals change
-  useEffect(() => {
+  const emissions = useMemo(() => {
     const transportTotal =
       transportCO2.car(watchedValues.car_km || 0) +
       transportCO2.bus(watchedValues.bus_days || 0) +
@@ -192,7 +180,7 @@ export const Calculator: React.FC = () => {
 
     const total = transportTotal + energyTotal + foodTotal + shoppingTotal + digitalTotal + cashTotal;
 
-    setEmissions({
+    return {
       transport: Math.round(transportTotal),
       energy: Math.round(energyTotal),
       food: Math.round(foodTotal),
@@ -200,7 +188,7 @@ export const Calculator: React.FC = () => {
       digital: Math.round(digitalTotal),
       cash: Math.round(cashTotal),
       total: Math.round(total),
-    });
+    };
   }, [watchedValues, cashTotal]);
 
   const parseReceiptText = () => {
@@ -304,9 +292,54 @@ export const Calculator: React.FC = () => {
       ];
 
       const nonZeroRows = insertRows.filter(r => r.value > 0 || r.subcategory === 'diet_type');
-      const { error } = await supabase.rpc('insert_carbon_entries', {
-        entries: JSON.stringify(nonZeroRows),
-      });
+      const { error } = await supabase
+        .from('carbon_entries')
+        .insert(
+          nonZeroRows.map((row) => ({
+            ...row,
+            user_id: user.id,
+            co2_emission:
+              row.category === 'transportation' && row.subcategory === 'car'
+                ? transportCO2.car(row.value)
+                : row.category === 'transportation' && row.subcategory === 'bus'
+                ? transportCO2.bus(row.value)
+                : row.category === 'transportation' && row.subcategory === 'metro'
+                ? transportCO2.metro(row.value)
+                : row.category === 'transportation' && row.subcategory === 'bike'
+                ? transportCO2.bike()
+                : row.category === 'transportation' && row.subcategory === 'flight'
+                ? transportCO2.flight(row.value)
+                : row.category === 'energy' && row.subcategory === 'electricity'
+                ? energyCO2.electricity(row.value)
+                : row.category === 'energy' && row.subcategory === 'gas'
+                ? energyCO2.gas(row.value)
+                : row.category === 'energy' && row.subcategory === 'water'
+                ? energyCO2.water(row.value)
+                : row.category === 'food' && row.subcategory === 'diet_type'
+                ? foodCO2.mealsPerYear(row.value, row.unit as 'vegetarian' | 'non-vegetarian' | 'mixed')
+                : row.category === 'food' && row.subcategory === 'meat'
+                ? foodCO2.meat(row.value)
+                : row.category === 'shopping' && row.subcategory === 'online'
+                ? shoppingCO2.online(row.value)
+                : row.category === 'shopping' && row.subcategory === 'clothing'
+                ? shoppingCO2.clothing(row.value)
+                : row.category === 'shopping' && row.subcategory === 'electronics'
+                ? shoppingCO2.electronics(row.value)
+                : row.category === 'shopping' && row.subcategory === 'waste'
+                ? shoppingCO2.waste(row.value)
+                : row.category === 'digital' && row.subcategory === 'streaming'
+                ? digitalCO2.streaming(row.value)
+                : row.category === 'digital' && row.subcategory === 'cloud'
+                ? digitalCO2.cloud(row.value)
+                : row.category === 'digital' && row.subcategory === 'email'
+                ? digitalCO2.email(row.value)
+                : row.category === 'digital' && row.subcategory === 'calls'
+                ? digitalCO2.calls(row.value)
+                : row.category === 'digital' && row.subcategory === 'social'
+                ? digitalCO2.social(row.value)
+                : 0,
+          }))
+        );
 
       if (error) {
         throw new Error(error.message);
@@ -337,13 +370,18 @@ export const Calculator: React.FC = () => {
     setCashSaving(true);
     setErrorMsg(null);
     try {
-      const { data: inserted, error } = await supabase.rpc('insert_cash_transaction', {
-        category: data.category,
-        amount: data.amount,
-        transaction_date: data.transaction_date,
-        receipt_url: data.receipt_url || null,
-        currency: 'INR',
-      });
+      const { data: inserted, error } = await supabase
+        .from('cash_transactions')
+        .insert({
+          user_id: user.id,
+          category: data.category,
+          amount: data.amount,
+          currency: 'INR',
+          parsed_co2: null,
+          receipt_url: data.receipt_url || null,
+          transaction_date: data.transaction_date,
+          co2_emission: cashTransactionCO2(data.category, data.amount),
+        });
 
       if (error) throw error;
       const newTx = inserted ?? {
