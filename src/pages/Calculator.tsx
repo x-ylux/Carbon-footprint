@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { useForm, useWatch, type SubmitHandler, type Resolver } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabaseClient';
+import type { Database } from '../types/supabase';
 import { 
   Car, 
   Zap, 
@@ -78,6 +80,7 @@ type TabId = 'transport' | 'energy' | 'food' | 'shopping' | 'digital' | 'cash';
 
 export const Calculator: React.FC = () => {
   const { user } = useAuth();
+  const db = supabase as SupabaseClient<Database, 'public', 'public'>;
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabId>('transport');
   const [saveLoading, setSaveLoading] = useState(false);
@@ -135,7 +138,7 @@ export const Calculator: React.FC = () => {
 
   useEffect(() => {
     if (!user) return;
-    supabase
+    db
       .from('cash_transactions')
       .select('*')
       .eq('user_id', user.id)
@@ -143,7 +146,7 @@ export const Calculator: React.FC = () => {
       .then(({ data }: { data: typeof cashTransactions | null }) => {
         if (data) setCashTransactions(data.slice(0, 10));
       });
-  }, [user]);
+  }, [db, user]);
 
   const cashTotal = cashTransactions.reduce((s, t) => s + Number(t.co2_emission), 0);
 
@@ -292,7 +295,7 @@ export const Calculator: React.FC = () => {
       ];
 
       const nonZeroRows = insertRows.filter(r => r.value > 0 || r.subcategory === 'diet_type');
-      const { error } = await supabase
+      const { error } = await db
         .from('carbon_entries')
         .insert(
           nonZeroRows.map((row) => ({
@@ -370,7 +373,7 @@ export const Calculator: React.FC = () => {
     setCashSaving(true);
     setErrorMsg(null);
     try {
-      const { data: inserted, error } = await supabase
+      const { data: inserted, error } = await db
         .from('cash_transactions')
         .insert({
           user_id: user.id,

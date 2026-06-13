@@ -27,6 +27,7 @@ export interface Database {
           target_budget?: number | null;
           created_at?: string;
         };
+        Relationships: [];
       };
       carbon_entries: {
         Row: {
@@ -57,6 +58,7 @@ export interface Database {
           co2_emission?: number;
           created_at?: string;
         };
+        Relationships: [];
       };
       cash_transactions: {
         Row: {
@@ -93,6 +95,7 @@ export interface Database {
           co2_emission?: number;
           created_at?: string;
         };
+        Relationships: [];
       };
       goals: {
         Row: {
@@ -111,6 +114,7 @@ export interface Database {
           annual_limit?: number;
           created_at?: string;
         };
+        Relationships: [];
       };
       budgets: {
         Row: {
@@ -135,6 +139,7 @@ export interface Database {
           spent?: number;
           created_at?: string;
         };
+        Relationships: [];
       };
       collective_events: {
         Row: {
@@ -166,6 +171,7 @@ export interface Database {
           co2_impact_kg?: number;
           created_at?: string;
         };
+        Relationships: [];
       };
       group_challenges: {
         Row: {
@@ -197,6 +203,7 @@ export interface Database {
           end_date?: string;
           created_at?: string;
         };
+        Relationships: [];
       };
     };
     Views: Record<string, never>;

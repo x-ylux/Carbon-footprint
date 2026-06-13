@@ -476,6 +476,6 @@ export const mockSupabase = {
 };
 
 // Export the active client
-export const supabase: SupabaseClient<Database> = 
-  (isSupabaseConfigured ? realSupabase : (mockSupabase as any)) as SupabaseClient<Database>;
+export const supabase: SupabaseClient<Database, 'public', 'public'> = 
+  (isSupabaseConfigured ? realSupabase : (mockSupabase as any)) as SupabaseClient<Database, 'public', 'public'>;
 export default supabase;

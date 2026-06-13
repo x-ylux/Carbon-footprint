@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '../types/supabase';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabaseClient';
 import { Link } from 'react-router-dom';
@@ -29,6 +31,17 @@ import {
 import confetti from 'canvas-confetti';
 import { INDIA_AVERAGE_KG, INDIA_AVERAGE_TONNES, TIPS } from '../lib/co2Formulas';
 
+const DashboardTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value?: number | string }>; label?: string | number }) => {
+  if (!active || !payload || payload.length === 0) return null;
+
+  return (
+    <div className="rounded-2xl bg-slate-950/95 border border-slate-800 p-3 shadow-xl text-white">
+      <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">{label}</p>
+      <div className="text-sm font-semibold">{payload[0].value} kg CO₂e</div>
+    </div>
+  );
+};
+
 interface CarbonEntry {
   id: string;
   category: string;
@@ -41,8 +54,7 @@ interface CarbonEntry {
 
 export const Dashboard: React.FC = () => {
   const { user } = useAuth();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const db = supabase as unknown as any;
+  const db = supabase as SupabaseClient<Database, 'public', 'public'>;
   const [entries, setEntries] = useState<CarbonEntry[]>([]);
   const [goal, setGoal] = useState<number>(3000); // Default 3000 kg CO2/year
   const [loading, setLoading] = useState(true);
@@ -77,7 +89,7 @@ export const Dashboard: React.FC = () => {
         .select('annual_limit')
         .eq('user_id', user.id)
         .single();
-      const goalData = goalResult.data as unknown;
+      const goalData = goalResult.data as { annual_limit: number } | null;
 
       if (goalResult.error && goalResult.error.message !== 'JSON object requested, multiple rows (or no rows) were returned') {
         // Ignorable if no rows, but log others
@@ -96,25 +108,19 @@ export const Dashboard: React.FC = () => {
         .eq('user_id', user.id)
         .eq('month_year', currentMonthKey)
         .single();
-      const budgetData = budgetResult.data as unknown;
+      const budgetData = budgetResult.data as { monthly_limit: number; spent: number } | null;
 
-      if (
-        budgetData &&
-        typeof budgetData === 'object' &&
-        'monthly_limit' in budgetData &&
-        'spent' in budgetData
-      ) {
-        const parsedBudgetData = budgetData as { monthly_limit: number; spent: number };
-        setBudgetLimit(Number(parsedBudgetData.monthly_limit));
-        setBudgetSpent(Number(parsedBudgetData.spent));
-        setBudgetInput(String(parsedBudgetData.monthly_limit));
+      if (budgetData) {
+        setBudgetLimit(Number(budgetData.monthly_limit));
+        setBudgetSpent(Number(budgetData.spent));
+        setBudgetInput(String(budgetData.monthly_limit));
       }
 
       const cashDataResult = await db
         .from('cash_transactions')
         .select('co2_emission, transaction_date')
         .eq('user_id', user.id);
-      const cashData = cashDataResult.data as unknown as Array<{ co2_emission: number; transaction_date: string }> | null;
+      const cashData = cashDataResult.data as Array<{ co2_emission: number; transaction_date: string }> | null;
 
       if (cashData?.length) {
         const monthCash = cashData.filter((t: { transaction_date: string }) => {
@@ -131,12 +137,16 @@ export const Dashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, db, currentMonthKey]);
 
   useEffect(() => {
-    fetchData();
-
     if (!user) return;
+
+    const executeFetch = async () => {
+      await fetchData();
+    };
+
+    void executeFetch();
 
     // Real-time listener subscription
     const channel = db
@@ -145,7 +155,7 @@ export const Dashboard: React.FC = () => {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'carbon_entries', filter: `user_id=eq.${user.id}` },
         () => {
-          fetchData();
+          void fetchData();
         }
       )
       .subscribe();
@@ -153,7 +163,7 @@ export const Dashboard: React.FC = () => {
     return () => {
       channel.unsubscribe();
     };
-  }, [fetchData, user]);
+  }, [fetchData, user, db]);
 
   // Handle Goal Update
   const handleUpdateBudget = async (e: React.FormEvent) => {
@@ -174,7 +184,7 @@ export const Dashboard: React.FC = () => {
           monthly_limit: val,
           month_year: currentMonthKey,
           spent: budgetSpent,
-        });
+        } as Database['public']['Tables']['budgets']['Insert']);
       if (error) throw error;
       setBudgetLimit(val);
     } catch (errorUnknown) {
@@ -201,7 +211,7 @@ export const Dashboard: React.FC = () => {
     try {
       const { error } = await db
         .from('goals')
-        .upsert({ user_id: user.id, annual_limit: val });
+        .upsert({ user_id: user.id, annual_limit: val } as Database['public']['Tables']['goals']['Insert']);
 
       if (error) throw error;
       setGoal(val);
@@ -560,15 +570,7 @@ export const Dashboard: React.FC = () => {
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" className="dark:stroke-slate-800" />
                   <XAxis dataKey="name" stroke="#94a3b8" />
                   <YAxis stroke="#94a3b8" />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'rgba(15, 24, 20, 0.9)', 
-                      border: 'none', 
-                      borderRadius: '12px',
-                      color: '#fff' 
-                    }}
-                    labelStyle={{ fontWeight: 'bold', marginBottom: '4px' }}
-                  />
+                  <Tooltip content={<DashboardTooltip />} />
                   <Line 
                     type="monotone" 
                     dataKey="emissions" 
@@ -600,14 +602,7 @@ export const Dashboard: React.FC = () => {
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" className="dark:stroke-slate-800" />
                   <XAxis dataKey="name" stroke="#94a3b8" />
                   <YAxis stroke="#94a3b8" />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'rgba(15, 24, 20, 0.9)', 
-                      border: 'none', 
-                      borderRadius: '12px',
-                      color: '#fff' 
-                    }}
-                  />
+                  <Tooltip content={<DashboardTooltip />} />
                   <Bar 
                     dataKey="emissions" 
                     fill="#4dabf7" 
