@@ -6,20 +6,32 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
 // Determine if we should use the actual Supabase or fallback mock
-export const isSupabaseConfigured = 
-  supabaseUrl && 
-  supabaseAnonKey && 
-  supabaseUrl !== 'YOUR_SUPABASE_URL' && 
-  supabaseAnonKey !== 'YOUR_SUPABASE_ANON_KEY';
+const isValidHttpUrl = (url: string): boolean => {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+  } catch {
+    return false;
+  }
+};
+
+export const isSupabaseConfigured =
+  isValidHttpUrl(supabaseUrl) &&
+  supabaseAnonKey.length > 20;
 
 if (!isSupabaseConfigured) {
   console.warn('Supabase env vars not found. Using local Storage Mock Backend.');
 }
 
 // Create the standard Supabase client (only if configured)
-const realSupabase: SupabaseClient<Database, 'public', 'public'> | null = isSupabaseConfigured 
-  ? createClient<Database, 'public'>(supabaseUrl, supabaseAnonKey) 
-  : null;
+let realSupabase: SupabaseClient<Database, 'public', 'public'> | null = null;
+if (isSupabaseConfigured) {
+  try {
+    realSupabase = createClient<Database, 'public'>(supabaseUrl, supabaseAnonKey);
+  } catch (e) {
+    console.warn('Failed to initialize Supabase client:', e);
+  }
+}
 
 // ==========================================
 // MOCK CLIENT IMPLEMENTATION
