@@ -13,10 +13,16 @@ vi.mock('../context/AuthContext', () => ({
   })),
 }));
 
-const mockQuery = {
+type QueryMock = {
+  eq: () => QueryMock;
+  order: () => QueryMock;
+  then: (cb: (result: { data: any[]; error: null }) => void) => void;
+};
+
+const mockQuery: QueryMock = {
   eq: vi.fn(() => mockQuery),
   order: vi.fn(() => mockQuery),
-  then: vi.fn((cb: any) => cb({ data: [], error: null })),
+  then: vi.fn((cb) => cb({ data: [], error: null })),
 };
 
 vi.mock('../lib/supabaseClient', () => ({
