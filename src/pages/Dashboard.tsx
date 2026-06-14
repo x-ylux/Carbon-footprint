@@ -677,16 +677,16 @@ export const Dashboard: React.FC = () => {
               {TIPS.map((tip, i) => (
                 <div
                   key={tip.title}
-                  className="p-3 rounded-xl bg-slate-50 dark:bg-slate-850/40 border border-slate-100 dark:border-slate-800 hover:border-forest-300 dark:hover:border-forest-700 transition-all duration-200"
+                  className="p-3 rounded-xl bg-slate-800/90 dark:bg-slate-900/95 border border-slate-700 dark:border-slate-800 hover:border-forest-300 dark:hover:border-forest-700 transition-all duration-200"
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-bold text-forest-600 dark:text-forest-400">#{i + 1}</span>
-                    <span className="text-2xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-0.5 rounded-full">
+                    <span className="text-xs font-bold text-forest-300 dark:text-forest-400">#{i + 1}</span>
+                    <span className="text-2xs font-bold text-emerald-200 dark:text-emerald-300 bg-emerald-700/20 dark:bg-emerald-950/30 px-2 py-0.5 rounded-full">
                       -{tip.savings}
                     </span>
                   </div>
-                  <h4 className="text-sm font-bold text-slate-800 dark:text-white">{tip.title}</h4>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{tip.desc}</p>
+                  <h4 className="text-sm font-bold text-slate-100 dark:text-white">{tip.title}</h4>
+                  <p className="text-xs text-slate-300 dark:text-slate-400 mt-0.5">{tip.desc}</p>
                 </div>
               ))}
             </div>
@@ -769,14 +769,14 @@ export const Dashboard: React.FC = () => {
               {entries.slice(-5).reverse().map((entry) => (
                 <div 
                   key={entry.id}
-                  className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-850/40 border border-slate-100 dark:border-slate-800/50 transition-all duration-200 group hover:border-slate-200 dark:hover:border-slate-750"
+                  className="flex items-center justify-between p-3 rounded-xl bg-slate-800/90 dark:bg-slate-900/95 border border-slate-700 dark:border-slate-800/50 transition-all duration-200 group hover:border-slate-500 dark:hover:border-slate-700"
                 >
                   <div className="min-w-0">
                     <div className="flex items-center space-x-1.5">
-                      <span className="text-xs font-bold capitalize text-slate-700 dark:text-slate-300">
+                      <span className="text-xs font-bold capitalize text-slate-200 dark:text-slate-300">
                         {entry.subcategory}
                       </span>
-                      <span className="text-3xs font-bold text-slate-400 bg-slate-200/50 dark:bg-slate-800 px-1.5 py-0.5 rounded-full capitalize">
+                      <span className="text-3xs font-bold text-slate-200 bg-slate-700/60 dark:bg-slate-800 px-1.5 py-0.5 rounded-full capitalize">
                         {entry.category}
                       </span>
                     </div>
@@ -787,7 +787,7 @@ export const Dashboard: React.FC = () => {
 
                   <div className="flex items-center space-x-2 text-right">
                     <div>
-                      <div className="text-xs font-extrabold text-slate-800 dark:text-white">
+                      <div className="text-xs font-extrabold text-slate-100 dark:text-white">
                         {Math.round(entry.co2_emission).toLocaleString()}
                       </div>
                       <div className="text-3xs font-semibold text-slate-400 uppercase tracking-wider">
