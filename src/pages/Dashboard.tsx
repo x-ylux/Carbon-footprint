@@ -666,10 +666,10 @@ export const Dashboard: React.FC = () => {
           </div>
 
           {/* Top 5 Tips */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/40 rounded-2xl p-6 shadow-sm space-y-4">
+          <div className="bg-slate-950/95 dark:bg-slate-900 border border-slate-800/50 rounded-2xl p-6 shadow-sm space-y-4">
             <div className="flex items-center space-x-2">
               <Lightbulb className="w-5 h-5 text-amber-500" />
-              <h3 className="font-display font-bold text-lg text-slate-800 dark:text-white">
+              <h3 className="font-display font-bold text-lg text-slate-100 dark:text-white">
                 Top 5 Reduction Tips
               </h3>
             </div>
