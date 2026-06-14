@@ -89,8 +89,31 @@ type MockResult<T> = { data: T; error: MockError };
 
 type MockCallback<T> = (result: MockResult<T>) => void;
 
-type MockOrderBuilder<T> = {
-  order: (field: string, opts?: { ascending?: boolean }) => { then: MockCallback<T> };
+type CashTransactionInsert = {
+  category: string;
+  amount: number;
+  transaction_date: string;
+  receipt_url?: string | null;
+  co2_emission: number;
+};
+
+type CarbonEntryInsert = {
+  category: string;
+  subcategory: string;
+  value: number;
+  unit: string;
+  co2_emission: number;
+  created_at?: string;
+};
+
+type GoalUpsert = {
+  annual_limit: number;
+};
+
+type BudgetUpsert = {
+  monthly_limit: number;
+  month_year: string;
+  spent?: number;
 };
 
 // Initial carbon entries seed for mockup
@@ -230,26 +253,26 @@ export const mockSupabase = {
     ];
 
     return {
-      select: (_fields: string = '*') => {
+      select: () => {
         if (table === 'collective_events') {
           return {
-            order: (_f: string, _opts?: any) => ({
-              then: (cb: any) => cb({ data: MOCK_EVENTS, error: null }),
-            }),
-          };
-        }
-        if (table === 'group_challenges') {
-          return {
-            order: (_f: string, _opts?: any) => ({
-              then: (cb: any) => cb({ data: MOCK_CHALLENGES, error: null }),
-            }),
-          };
-        }
+              order: () => ({
+                then: (cb: MockCallback<typeof MOCK_EVENTS>) => cb({ data: MOCK_EVENTS, error: null }),
+              }),
+            };
+          }
+          if (table === 'group_challenges') {
+            return {
+              order: () => ({
+                then: (cb: MockCallback<typeof MOCK_CHALLENGES>) => cb({ data: MOCK_CHALLENGES, error: null }),
+              }),
+            };
+          }
 
-        return {
-          eq: (field: string, val: any) => {
+          return {
+            eq: (field: string, val: unknown) => {
             const eqBuilder = {
-              eq: (_field2: string, val2: any) => ({
+              eq: (_field2: string, val2: unknown) => ({
                 single: async () => {
                   const session = getLocal('mock_session', null);
                   if (!session) return { data: null, error: { message: 'Unauthorized' } };
@@ -263,8 +286,8 @@ export const mockSupabase = {
                   return { data: null, error: { message: 'Not implemented' } };
                 },
               }),
-              order: (_orderField: string, { ascending }: any = {}) => ({
-                then: (callback: any) => {
+              order: (_orderField: string, { ascending }: { ascending?: boolean } = {}) => ({
+                then: (callback: MockCallback<CarbonEntry[]>) => {
                   const session = getLocal('mock_session', null);
                   if (!session) return callback({ data: [], error: { message: 'Unauthorized' } });
                   if (table === 'cash_transactions') {
@@ -280,7 +303,7 @@ export const mockSupabase = {
                   return callback({ data: [], error: null });
                 },
               }),
-              then: (callback: any) => {
+              then: (callback: MockCallback<CashTransaction[]>) => {
                 const session = getLocal('mock_session', null);
                 if (!session) return callback({ data: [], error: { message: 'Unauthorized' } });
                 if (table === 'cash_transactions' && field === 'user_id') {
@@ -311,9 +334,9 @@ export const mockSupabase = {
                 
                 return { data: null, error: { message: 'Not implemented' } };
               },
-              order: (_orderField: string, { ascending }: any = {}) => {
+              order: (_orderField: string, { ascending }: { ascending?: boolean } = {}) => {
                 return {
-                  then: (callback: any) => {
+                  then: (callback: MockCallback<CarbonEntry[]>) => {
                     const session = getLocal('mock_session', null);
                     if (!session) return callback({ data: [], error: { message: 'Unauthorized' } });
 
@@ -347,19 +370,19 @@ export const mockSupabase = {
         };
       },
 
-      insert: async (data: any[]) => {
+      insert: async (data: readonly CashTransactionInsert[] | readonly CarbonEntryInsert[]) => {
         const session = getLocal('mock_session', null);
         if (!session) return { data: null, error: { message: 'Unauthorized' } };
 
         if (table === 'cash_transactions') {
           const txs: CashTransaction[] = getLocal('mock_cash_transactions', []);
-          const newTxs: CashTransaction[] = data.map((item) => ({
+          const newTxs: CashTransaction[] = (data as readonly CashTransactionInsert[]).map((item) => ({
             id: crypto.randomUUID(),
             user_id: session.user.id,
             category: item.category,
             amount: item.amount,
             transaction_date: item.transaction_date,
-            receipt_url: item.receipt_url,
+            receipt_url: item.receipt_url ?? null,
             co2_emission: item.co2_emission,
             created_at: new Date().toISOString(),
           }));
@@ -370,7 +393,7 @@ export const mockSupabase = {
 
         if (table === 'carbon_entries') {
           const entries: CarbonEntry[] = getLocal('mock_carbon_entries', []);
-          const newEntries: CarbonEntry[] = data.map(item => ({
+          const newEntries: CarbonEntry[] = (data as readonly CarbonEntryInsert[]).map((item) => ({
             id: crypto.randomUUID(),
             user_id: session.user.id,
             category: item.category,
@@ -378,7 +401,7 @@ export const mockSupabase = {
             value: item.value,
             unit: item.unit,
             co2_emission: item.co2_emission,
-            created_at: item.created_at || new Date().toISOString()
+            created_at: item.created_at || new Date().toISOString(),
           }));
 
           const updated = [...entries, ...newEntries];
@@ -390,19 +413,20 @@ export const mockSupabase = {
         return { data: null, error: { message: 'Not implemented' } };
       },
 
-      upsert: async (data: any) => {
+      upsert: async (data: GoalUpsert | BudgetUpsert) => {
         const session = getLocal('mock_session', null);
         if (!session) return { data: null, error: { message: 'Unauthorized' } };
 
         if (table === 'goals') {
           const goals: Goal[] = getLocal('mock_goals', []);
-          const existingIndex = goals.findIndex(g => g.user_id === session.user.id);
+          const existingIndex = goals.findIndex((g) => g.user_id === session.user.id);
+          const goalData = data as GoalUpsert;
           
           const newGoal: Goal = {
             id: existingIndex >= 0 ? goals[existingIndex].id : crypto.randomUUID(),
             user_id: session.user.id,
-            annual_limit: data.annual_limit,
-            created_at: new Date().toISOString()
+            annual_limit: goalData.annual_limit,
+            created_at: new Date().toISOString(),
           };
 
           if (existingIndex >= 0) {
@@ -418,15 +442,16 @@ export const mockSupabase = {
 
         if (table === 'budgets') {
           const budgets: Budget[] = getLocal('mock_budgets', []);
+          const budgetData = data as BudgetUpsert;
           const idx = budgets.findIndex(
-            (b) => b.user_id === session.user.id && b.month_year === data.month_year
+            (b) => b.user_id === session.user.id && b.month_year === budgetData.month_year
           );
           const newBudget: Budget = {
             id: idx >= 0 ? budgets[idx].id : crypto.randomUUID(),
             user_id: session.user.id,
-            monthly_limit: data.monthly_limit,
-            month_year: data.month_year,
-            spent: data.spent ?? 0,
+            monthly_limit: budgetData.monthly_limit,
+            month_year: budgetData.month_year,
+            spent: budgetData.spent ?? 0,
             created_at: new Date().toISOString(),
           };
           if (idx >= 0) budgets[idx] = newBudget;
@@ -441,9 +466,9 @@ export const mockSupabase = {
 
       delete: () => {
         return {
-          eq: (field: string, val: any) => {
+          eq: (field: string, val: unknown) => {
             return {
-              then: async (callback: any) => {
+              then: async (callback: MockCallback<CashTransaction[]>) => {
                 const session = getLocal('mock_session', null);
                 if (!session) return callback({ data: null, error: { message: 'Unauthorized' } });
 
@@ -465,7 +490,7 @@ export const mockSupabase = {
 
   channel: (_channelName: string) => {
     return {
-      on: (_type: string, _filter: any, callback: any) => {
+      on: (_type: string, _filter: unknown, callback: (payload: { new: Record<string, unknown>; eventType: string }) => void) => {
         const handler = () => {
           callback({
             new: {},
@@ -488,6 +513,6 @@ export const mockSupabase = {
 };
 
 // Export the active client
-export const supabase: SupabaseClient<Database, 'public', 'public'> = 
-  (isSupabaseConfigured ? realSupabase : (mockSupabase as any)) as SupabaseClient<Database, 'public', 'public'>;
+export const supabase: SupabaseClient<Database, 'public', 'public'> =
+  (isSupabaseConfigured ? realSupabase : (mockSupabase as unknown)) as SupabaseClient<Database, 'public', 'public'>;
 export default supabase;

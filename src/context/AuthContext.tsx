@@ -1,20 +1,8 @@
-import React, { createContext, useCallback, useEffect, useState } from 'react';
-import type { AuthError, User, Session } from '@supabase/supabase-js';
-import type { Database } from '../types/supabase';
+import React, { useCallback, useEffect, useState } from 'react';
+import type { Session, User } from '@supabase/supabase-js';
+import { AuthContext } from './authContext';
 import { supabase } from '../lib/supabaseClient';
-
-type Profile = Database['public']['Tables']['users']['Row'];
-
-type AuthContextType = {
-  user: User | null;
-  profile: Profile | null;
-  loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
-  signUp: (email: string, password: string, name: string) => Promise<{ error: AuthError | null; needsVerification: boolean | null }>;
-  signOut: () => Promise<{ error: AuthError | null }>;
-};
-
-export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+import type { Profile } from './authContext';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);

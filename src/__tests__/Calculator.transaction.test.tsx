@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { vi } from 'vitest';
 import Calculator from '../pages/Calculator';
 
-vi.mock('../context/AuthContext', () => ({
+vi.mock('../context/useAuth', () => ({
   useAuth: vi.fn(() => ({
     user: { id: 'test-user', email: 'test@example.com' },
     session: null,
@@ -16,7 +16,7 @@ vi.mock('../context/AuthContext', () => ({
 type QueryMock = {
   eq: () => QueryMock;
   order: () => QueryMock;
-  then: (cb: (result: { data: any[]; error: null }) => void) => void;
+  then: (cb: (result: { data: unknown[]; error: null }) => void) => void;
 };
 
 const mockQuery: QueryMock = {
