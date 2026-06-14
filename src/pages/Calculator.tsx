@@ -4,7 +4,7 @@ import { useForm, useWatch, type SubmitHandler, type Resolver } from 'react-hook
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import { supabase } from '../lib/supabaseClient';
 import type { Database } from '../types/supabase';
 import { 

@@ -26,9 +26,9 @@ const realSupabase: SupabaseClient<Database, 'public', 'public'> | null = isSupa
 // ==========================================
 
 // Helpers for localStorage persistence
-const getLocal = (key: string, defaultValue: any): any => {
+const getLocal = <T>(key: string, defaultValue: T): T => {
   const data = localStorage.getItem(key);
-  return data ? JSON.parse(data) : defaultValue;
+  return data ? JSON.parse(data) as T : defaultValue;
 };
 
 const setLocal = <T>(key: string, value: T): void => {
@@ -81,6 +81,18 @@ interface User {
   created_at: string;
 }
 
+type MockSession = { user: User; access_token: string } | null;
+
+type MockError = { message: string } | null;
+
+type MockResult<T> = { data: T; error: MockError };
+
+type MockCallback<T> = (result: MockResult<T>) => void;
+
+type MockOrderBuilder<T> = {
+  order: (field: string, opts?: { ascending?: boolean }) => { then: MockCallback<T> };
+};
+
 // Initial carbon entries seed for mockup
 const seedEntries = (userId: string): CarbonEntry[] => {
   const now = new Date();
@@ -118,7 +130,7 @@ const notifySubscribers = () => {
 
 export const mockSupabase = {
   auth: {
-    signUp: async ({ email, options }: any) => {
+    signUp: async ({ email, options }: { email: string; options?: { data?: { name?: string } } }) => {
       const users: User[] = getLocal('mock_users', []);
       if (users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
         return { data: { user: null }, error: { message: 'User already exists.' } };
@@ -156,7 +168,7 @@ export const mockSupabase = {
       return { data: { user: newUser, session }, error: null };
     },
 
-    signInWithPassword: async ({ email }: any) => {
+    signInWithPassword: async ({ email }: { email: string }) => {
       const users: User[] = getLocal('mock_users', []);
       const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
       
@@ -182,7 +194,7 @@ export const mockSupabase = {
       return { data: { session }, error: null };
     },
 
-    onAuthStateChange: (callback: any) => {
+    onAuthStateChange: (callback: (event: string, session: MockSession) => void) => {
       const handler = () => {
         const session = getLocal('mock_session', null);
         callback(session ? 'SIGNED_IN' : 'SIGNED_OUT', session);

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '../types/supabase';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/useAuth';
 import { supabase } from '../lib/supabaseClient';
 import { Link } from 'react-router-dom';
 import { 

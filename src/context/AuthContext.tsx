@@ -1,20 +1,20 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import type { User, Session } from '@supabase/supabase-js';
+import React, { createContext, useCallback, useEffect, useState } from 'react';
+import type { AuthError, User, Session } from '@supabase/supabase-js';
 import type { Database } from '../types/supabase';
 import { supabase } from '../lib/supabaseClient';
 
 type Profile = Database['public']['Tables']['users']['Row'];
 
-interface AuthContextType {
+type AuthContextType = {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: any }>;
-  signUp: (email: string, password: string, name: string) => Promise<{ error: any; needsVerification: boolean | null }>;
-  signOut: () => Promise<{ error: any }>;
-}
+  signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
+  signUp: (email: string, password: string, name: string) => Promise<{ error: AuthError | null; needsVerification: boolean | null }>;
+  signOut: () => Promise<{ error: AuthError | null }>;
+};
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -22,7 +22,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   // Fetch public profile from database
-  const fetchProfile = async (userId: string) => {
+  const fetchProfile = useCallback(async (userId: string) => {
     try {
       const { data, error } = await supabase
         .from('users')
@@ -32,12 +32,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         console.error('Error fetching profile:', error.message);
-        // Fallback profile if record not found yet (common in fast mock flows)
         if (user) {
+          const fallbackName = typeof user.user_metadata?.name === 'string'
+            ? user.user_metadata.name
+            : user.email?.split('@')[0] || 'User';
+
           setProfile({
             id: userId,
             email: user.email || '',
-            name: user.user_metadata?.name || user.email?.split('@')[0] || 'User',
+            name: fallbackName,
             country: null,
             target_budget: null,
             created_at: user.created_at || new Date().toISOString(),
@@ -46,10 +49,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         setProfile(data);
       }
-    } catch (err) {
-      console.error('Catch profile error:', err);
+    } catch (err: unknown) {
+      console.error('Catch profile error:', err instanceof Error ? err.message : String(err));
     }
-  };
+  }, [user]);
 
   useEffect(() => {
     // 1. Get initial session
@@ -88,7 +91,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [fetchProfile]);
 
   const signIn = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -134,12 +137,4 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       {children}
     </AuthContext.Provider>
   );
-};
-
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
 };
