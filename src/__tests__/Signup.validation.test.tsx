@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { Signup } from '../pages/Signup';
 
-vi.mock('../context/AuthContext', () => ({
+vi.mock('../context/useAuth', () => ({
   useAuth: () => ({
     signUp: vi.fn(async () => ({ error: null, needsVerification: false })),
   }),

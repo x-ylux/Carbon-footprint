@@ -3,22 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import { useTheme } from '../context/useTheme';
 import { isSupabaseConfigured } from '../lib/supabaseClient';
-import { 
-  Leaf, 
-  LayoutDashboard, 
-  Calculator, 
-  Home, 
-  LogIn, 
-  LogOut, 
-  Menu, 
-  X, 
-  Sun, 
-  Moon,
-  Database,
-  User as UserIcon,
-  Users,
-  Info
-} from 'lucide-react';
+import { Leaf, LayoutDashboard, Calculator, Hop as Home, LogIn, LogOut, Menu, X, Sun, Moon, Database, User as UserIcon, Users, Info } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
   const { user, profile, signOut } = useAuth();
@@ -43,12 +28,12 @@ export const Navbar: React.FC = () => {
   `;
 
   return (
-    <nav className="sticky top-0 z-50 w-full glass shadow-sm transition-all duration-300">
+    <nav className="sticky top-0 z-50 w-full glass shadow-sm transition-all duration-300" role="navigation" aria-label="Main navigation">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Brand Logo */}
-          <Link to="/" className="flex items-center space-x-2 group">
-            <div className="bg-forest-500 text-white p-2 rounded-xl group-hover:scale-110 transition-transform duration-300 shadow-md shadow-forest-500/20">
+          <Link to="/" className="flex items-center space-x-2 group" aria-label="EcoTrace home">
+            <div className="bg-forest-500 text-white p-2 rounded-xl group-hover:scale-110 transition-transform duration-300 shadow-md shadow-forest-500/20" aria-hidden="true">
               <Leaf className="w-5 h-5 animate-pulse-slow" />
             </div>
             <span className="font-display font-extrabold text-xl tracking-tight bg-gradient-to-r from-forest-700 to-forest-500 dark:from-forest-300 dark:to-forest-500 bg-clip-text text-transparent">
@@ -57,32 +42,42 @@ export const Navbar: React.FC = () => {
           </Link>
 
           {/* Desktop Navigation Links */}
-          <div className="hidden md:flex items-center space-x-1">
-            <Link to="/" className={linkClass('/')}>
-              <Home className="w-4 h-4" />
-              <span>Home</span>
-            </Link>
-            <Link to="/about" className={linkClass('/about')}>
-              <Info className="w-4 h-4" />
-              <span>About</span>
-            </Link>
-            <Link to="/collective" className={linkClass('/collective')}>
-              <Users className="w-4 h-4" />
-              <span>Collective</span>
-            </Link>
+          <ul className="hidden md:flex items-center space-x-1" role="list">
+            <li>
+              <Link to="/" className={linkClass('/')}>
+                <Home className="w-4 h-4" aria-hidden="true" />
+                <span>Home</span>
+              </Link>
+            </li>
+            <li>
+              <Link to="/about" className={linkClass('/about')}>
+                <Info className="w-4 h-4" aria-hidden="true" />
+                <span>About</span>
+              </Link>
+            </li>
+            <li>
+              <Link to="/collective" className={linkClass('/collective')}>
+                <Users className="w-4 h-4" aria-hidden="true" />
+                <span>Collective</span>
+              </Link>
+            </li>
             {user && (
               <>
-                <Link to="/dashboard" className={linkClass('/dashboard')}>
-                  <LayoutDashboard className="w-4 h-4" />
-                  <span>Dashboard</span>
-                </Link>
-                <Link to="/calculator" className={linkClass('/calculator')}>
-                  <Calculator className="w-4 h-4" />
-                  <span>Calculator</span>
-                </Link>
+                <li>
+                  <Link to="/dashboard" className={linkClass('/dashboard')}>
+                    <LayoutDashboard className="w-4 h-4" aria-hidden="true" />
+                    <span>Dashboard</span>
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/calculator" className={linkClass('/calculator')}>
+                    <Calculator className="w-4 h-4" aria-hidden="true" />
+                    <span>Calculator</span>
+                  </Link>
+                </li>
               </>
             )}
-          </div>
+          </ul>
 
           {/* Action buttons & Toggle Theme */}
           <div className="hidden md:flex items-center space-x-3">
@@ -102,12 +97,14 @@ export const Navbar: React.FC = () => {
             </div>
 
             {/* Theme Toggle */}
-            <button 
+            <button
               onClick={toggleTheme}
               className="p-2 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer"
               title="Toggle color theme"
+              aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+              type="button"
             >
-              {theme === 'light' ? <Moon className="w-4.5 h-4.5" /> : <Sun className="w-4.5 h-4.5" />}
+              {theme === 'light' ? <Moon className="w-4.5 h-4.5" aria-hidden="true" /> : <Sun className="w-4.5 h-4.5" aria-hidden="true" />}
             </button>
 
             {/* Auth section */}
@@ -122,8 +119,10 @@ export const Navbar: React.FC = () => {
                 <button
                   onClick={signOut}
                   className="flex items-center space-x-1 px-3 py-2 rounded-xl text-sm font-semibold bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white transition-all duration-200 cursor-pointer"
+                  type="button"
+                  aria-label="Sign out of your account"
                 >
-                  <LogOut className="w-4 h-4" />
+                  <LogOut className="w-4 h-4" aria-hidden="true" />
                   <span>Logout</span>
                 </button>
               </div>
@@ -149,27 +148,37 @@ export const Navbar: React.FC = () => {
           {/* Mobile menu and theme toggle buttons */}
           <div className="flex items-center space-x-2 md:hidden">
             {/* Theme Toggle (Mobile) */}
-            <button 
+            <button
               onClick={toggleTheme}
               className="p-2 rounded-xl bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 transition-colors"
+              aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+              type="button"
             >
-              {theme === 'light' ? <Moon className="w-4.5 h-4.5" /> : <Sun className="w-4.5 h-4.5" />}
+              {theme === 'light' ? <Moon className="w-4.5 h-4.5" aria-hidden="true" /> : <Sun className="w-4.5 h-4.5" aria-hidden="true" />}
             </button>
 
             {/* Mobile Menu Toggle */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="p-2 rounded-xl text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white bg-slate-100 dark:bg-slate-800"
+              aria-expanded={mobileMenuOpen}
+              aria-controls="mobile-menu"
+              aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+              type="button"
             >
-              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              {mobileMenuOpen ? <X className="w-5 h-5" aria-hidden="true" /> : <Menu className="w-5 h-5" aria-hidden="true" />}
             </button>
           </div>
         </div>
       </div>
 
       {/* Mobile Drawer Menu */}
-      {mobileMenuOpen && (
-        <div className="md:hidden glass border-t border-slate-200/50 dark:border-slate-800/50 px-4 pt-2 pb-6 space-y-3 shadow-inner">
+      <div
+        id="mobile-menu"
+        className={`md:hidden glass border-t border-slate-200/50 dark:border-slate-800/50 px-4 pt-2 pb-6 space-y-3 shadow-inner ${mobileMenuOpen ? '' : 'hidden'}`}
+        role="menu"
+        aria-hidden={!mobileMenuOpen}
+      >
           <div className="space-y-1">
             <Link 
               to="/" 
@@ -254,8 +263,10 @@ export const Navbar: React.FC = () => {
                     setMobileMenuOpen(false);
                   }}
                   className="w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-xl text-base font-semibold bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white transition-all duration-200 cursor-pointer"
+                  type="button"
+                  aria-label="Sign out of your account"
                 >
-                  <LogOut className="w-5 h-5" />
+                  <LogOut className="w-5 h-5" aria-hidden="true" />
                   <span>Logout</span>
                 </button>
               </div>
@@ -280,7 +291,6 @@ export const Navbar: React.FC = () => {
             )}
           </div>
         </div>
-      )}
     </nav>
   );
 };

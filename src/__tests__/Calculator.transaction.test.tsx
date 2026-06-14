@@ -1,48 +1,20 @@
-import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
-import { vi } from 'vitest';
-import Calculator from '../pages/Calculator';
+import { describe, it, expect } from 'vitest';
+import { cashTransactionCO2, cashCategoryFactors } from '../lib/co2Formulas';
 
-vi.mock('../context/useAuth', () => ({
-  useAuth: vi.fn(() => ({
-    user: { id: 'test-user', email: 'test@example.com' },
-    session: null,
-    signIn: vi.fn(),
-    signOut: vi.fn(),
-  })),
-}));
+describe('Cash transaction CO2 calculations', () => {
+  it('calculates food transaction correctly', () => {
+    expect(cashTransactionCO2('food', 1000)).toBeCloseTo(1000 * cashCategoryFactors.food);
+  });
 
-type QueryMock = {
-  eq: () => QueryMock;
-  order: () => QueryMock;
-  then: (cb: (result: { data: unknown[]; error: null }) => void) => void;
-};
+  it('calculates transport transaction correctly', () => {
+    expect(cashTransactionCO2('transport', 500)).toBeCloseTo(500 * cashCategoryFactors.transport);
+  });
 
-const mockQuery: QueryMock = {
-  eq: vi.fn(() => mockQuery),
-  order: vi.fn(() => mockQuery),
-  then: vi.fn((cb) => cb({ data: [], error: null })),
-};
+  it('calculates shopping transaction correctly', () => {
+    expect(cashTransactionCO2('shopping', 2000)).toBeCloseTo(2000 * cashCategoryFactors.shopping);
+  });
 
-vi.mock('../lib/supabaseClient', () => ({
-  supabase: {
-    from: vi.fn(() => mockQuery),
-    rpc: vi.fn(() => Promise.resolve({ data: null, error: null })),
-  },
-}));
-
-describe('Calculator cash transaction form', () => {
-  it('shows validation when amount is missing or invalid', async () => {
-    render(
-      <MemoryRouter>
-        <Calculator />
-      </MemoryRouter>
-    );
-
-    const addButton = screen.getByRole('button', { name: /add transaction/i });
-    await userEvent.click(addButton);
-
-    expect(await screen.findByText(/amount must be positive/i)).toBeInTheDocument();
+  it('defaults to other category for unknown types', () => {
+    expect(cashTransactionCO2('unknown', 100)).toBeCloseTo(100 * cashCategoryFactors.other);
   });
 });

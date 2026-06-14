@@ -89,6 +89,8 @@ type MockResult<T> = { data: T; error: MockError };
 
 type MockCallback<T> = (result: MockResult<T>) => void;
 
+type UnknownArray = unknown[];
+
 type CashTransactionInsert = {
   category: string;
   amount: number;
@@ -287,7 +289,7 @@ export const mockSupabase = {
                 },
               }),
               order: (_orderField: string, { ascending }: { ascending?: boolean } = {}) => ({
-                then: (callback: MockCallback<CarbonEntry[]>) => {
+                then: (callback: MockCallback<UnknownArray>) => {
                   const session = getLocal('mock_session', null);
                   if (!session) return callback({ data: [], error: { message: 'Unauthorized' } });
                   if (table === 'cash_transactions') {
@@ -303,7 +305,7 @@ export const mockSupabase = {
                   return callback({ data: [], error: null });
                 },
               }),
-              then: (callback: MockCallback<CashTransaction[]>) => {
+              then: (callback: MockCallback<UnknownArray>) => {
                 const session = getLocal('mock_session', null);
                 if (!session) return callback({ data: [], error: { message: 'Unauthorized' } });
                 if (table === 'cash_transactions' && field === 'user_id') {
@@ -317,42 +319,42 @@ export const mockSupabase = {
             return {
               ...eqBuilder,
               single: async () => {
-                const session = getLocal('mock_session', null);
+                const session = getLocal<MockSession>('mock_session', null);
                 if (!session) return { data: null, error: { message: 'Unauthorized' } };
-                
+
                 if (table === 'users') {
                   const users: User[] = getLocal('mock_users', []);
                   const user = users.find(u => u.id === val);
                   return { data: user || null, error: user ? null : { message: 'Not found' } };
                 }
-                
+
                 if (table === 'goals') {
                   const goals: Goal[] = getLocal('mock_goals', []);
                   const goal = goals.find(g => g.user_id === val);
                   return { data: goal || null, error: null }; // return no error if no goal is set, just return null data
                 }
-                
+
                 return { data: null, error: { message: 'Not implemented' } };
               },
               order: (_orderField: string, { ascending }: { ascending?: boolean } = {}) => {
                 return {
-                  then: (callback: MockCallback<CarbonEntry[]>) => {
-                    const session = getLocal('mock_session', null);
+                  then: (callback: MockCallback<UnknownArray>) => {
+                    const session = getLocal<MockSession>('mock_session', null);
                     if (!session) return callback({ data: [], error: { message: 'Unauthorized' } });
 
                     if (table === 'carbon_entries') {
                       let entries: CarbonEntry[] = getLocal('mock_carbon_entries', []);
                       entries = entries.filter(e => e.user_id === val);
-                      
+
                       entries.sort((a, b) => {
                         const timeA = new Date(a.created_at).getTime();
                         const timeB = new Date(b.created_at).getTime();
                         return ascending ? timeA - timeB : timeB - timeA;
                       });
-                      
+
                       return callback({ data: entries, error: null });
                     }
-                    
+
                     return callback({ data: [], error: null });
                   }
                 };
@@ -361,7 +363,7 @@ export const mockSupabase = {
           },
           single: async () => {
             if (table === 'users') {
-              const session = getLocal('mock_session', null);
+              const session = getLocal<MockSession>('mock_session', null);
               if (!session) return { data: null, error: { message: 'Unauthorized' } };
               return { data: session.user, error: null };
             }
@@ -371,7 +373,7 @@ export const mockSupabase = {
       },
 
       insert: async (data: readonly CashTransactionInsert[] | readonly CarbonEntryInsert[]) => {
-        const session = getLocal('mock_session', null);
+        const session = getLocal<MockSession>('mock_session', null);
         if (!session) return { data: null, error: { message: 'Unauthorized' } };
 
         if (table === 'cash_transactions') {
@@ -414,14 +416,14 @@ export const mockSupabase = {
       },
 
       upsert: async (data: GoalUpsert | BudgetUpsert) => {
-        const session = getLocal('mock_session', null);
+        const session = getLocal<MockSession>('mock_session', null);
         if (!session) return { data: null, error: { message: 'Unauthorized' } };
 
         if (table === 'goals') {
           const goals: Goal[] = getLocal('mock_goals', []);
           const existingIndex = goals.findIndex((g) => g.user_id === session.user.id);
           const goalData = data as GoalUpsert;
-          
+
           const newGoal: Goal = {
             id: existingIndex >= 0 ? goals[existingIndex].id : crypto.randomUUID(),
             user_id: session.user.id,
@@ -468,18 +470,18 @@ export const mockSupabase = {
         return {
           eq: (field: string, val: unknown) => {
             return {
-              then: async (callback: MockCallback<CashTransaction[]>) => {
-                const session = getLocal('mock_session', null);
-                if (!session) return callback({ data: null, error: { message: 'Unauthorized' } });
+              then: async (callback: MockCallback<UnknownArray>) => {
+                const session = getLocal<MockSession>('mock_session', null);
+                if (!session) return callback({ data: [], error: { message: 'Unauthorized' } });
 
                 if (table === 'carbon_entries') {
                   const entries: CarbonEntry[] = getLocal('mock_carbon_entries', []);
                   const updated = entries.filter(e => !(e[field as keyof CarbonEntry] === val && e.user_id === session.user.id));
                   setLocal('mock_carbon_entries', updated);
                   notifySubscribers();
-                  return callback({ data: null, error: null });
+                  return callback({ data: [], error: null });
                 }
-                return callback({ data: null, error: { message: 'Not implemented' } });
+                return callback({ data: [], error: { message: 'Not implemented' } });
               }
             };
           }
@@ -488,7 +490,7 @@ export const mockSupabase = {
     };
   },
 
-  channel: () => {
+  channel: (_channelName: string) => {
     return {
       on: (_type: string, _filter: unknown, callback: (payload: { new: Record<string, unknown>; eventType: string }) => void) => {
         const handler = () => {

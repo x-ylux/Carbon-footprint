@@ -18,22 +18,22 @@ export const Home: React.FC = () => {
 
   return (
     <div className="relative min-h-[calc(100vh-4rem)] overflow-hidden bg-forest-50/30 dark:bg-forest-950/10">
-      
+
       {/* Decorative Blob Elements */}
-      <div className="absolute top-20 -left-20 w-72 h-72 rounded-full bg-forest-300/10 dark:bg-forest-900/10 blur-3xl pointer-events-none"></div>
-      <div className="absolute -bottom-10 right-10 w-96 h-96 rounded-full bg-sky-primary/10 dark:bg-sky-dark/5 blur-3xl pointer-events-none"></div>
+      <div className="absolute top-20 -left-20 w-72 h-72 rounded-full bg-forest-300/10 dark:bg-forest-900/10 blur-3xl pointer-events-none" aria-hidden="true" />
+      <div className="absolute -bottom-10 right-10 w-96 h-96 rounded-full bg-sky-primary/10 dark:bg-sky-dark/5 blur-3xl pointer-events-none" aria-hidden="true" />
 
       {/* Hero Section */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 pb-16 md:pt-20 md:pb-24 relative z-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-          
+
           {/* Left Hero Column */}
           <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
             <div className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-full bg-forest-100/60 dark:bg-forest-900/40 text-forest-700 dark:text-forest-400 text-xs font-semibold border border-forest-200/50 dark:border-forest-800/40 animate-fade-in">
-              <Sparkles className="w-3.5 h-3.5 text-forest-500 animate-spin duration-[6s]" />
+              <Sparkles className="w-3.5 h-3.5 text-forest-500 animate-spin duration-[6s]" aria-hidden="true" />
               <span>Real-Time Carbon Tracking & Analytics</span>
             </div>
-            
+
             <h1 className="font-display font-extrabold text-4xl sm:text-5xl lg:text-6xl tracking-tight leading-none text-slate-900 dark:text-white">
               Understand and{' '}
               <span className="bg-gradient-to-r from-forest-600 to-forest-400 dark:from-forest-400 dark:to-forest-500 bg-clip-text text-transparent">
@@ -41,7 +41,7 @@ export const Home: React.FC = () => {
               </span>{' '}
               Your Environmental Impact
             </h1>
-            
+
             <p className="text-lg text-slate-600 dark:text-slate-300 max-w-2xl mx-auto lg:mx-0 font-medium">
               Calculate your annual carbon footprint across transport, home energy, diet, and shopping. Set goals, analyze trends, and take actionable steps to live a greener, more sustainable life.
             </p>
@@ -54,14 +54,14 @@ export const Home: React.FC = () => {
                     className="w-full sm:w-auto flex items-center justify-center space-x-2 px-8 py-3.5 rounded-xl font-bold text-white bg-forest-600 hover:bg-forest-700 shadow-lg shadow-forest-600/35 hover:scale-[1.03] transition-all duration-300 cursor-pointer"
                   >
                     <span>Go to Dashboard</span>
-                    <ArrowRight className="w-5 h-5" />
+                    <ArrowRight className="w-5 h-5" aria-hidden="true" />
                   </Link>
                   <Link
                     to="/calculator"
                     className="w-full sm:w-auto flex items-center justify-center space-x-2 px-8 py-3.5 rounded-xl font-bold text-white bg-sky-primary hover:bg-sky-dark shadow-lg shadow-sky-primary/30 hover:scale-[1.03] transition-all duration-300 cursor-pointer"
                   >
                     <span>Open Calculator</span>
-                    <ArrowRight className="w-5 h-5" />
+                    <ArrowRight className="w-5 h-5" aria-hidden="true" />
                   </Link>
                 </>
               ) : (
@@ -71,7 +71,7 @@ export const Home: React.FC = () => {
                     className="w-full sm:w-auto flex items-center justify-center space-x-2 px-8 py-3.5 rounded-xl font-bold text-white bg-forest-600 hover:bg-forest-700 shadow-lg shadow-forest-600/35 hover:scale-[1.03] transition-all duration-300 cursor-pointer"
                   >
                     <span>Get Started</span>
-                    <ArrowRight className="w-5 h-5" />
+                    <ArrowRight className="w-5 h-5" aria-hidden="true" />
                   </Link>
                   <Link
                     to="/login"

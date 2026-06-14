@@ -2,7 +2,7 @@ import { createContext } from 'react';
 import type { AuthError, User } from '@supabase/supabase-js';
 import type { Database } from '../types/supabase';
 
-type Profile = Database['public']['Tables']['users']['Row'];
+export type Profile = Database['public']['Tables']['users']['Row'];
 
 export type AuthContextType = {
   user: User | null;

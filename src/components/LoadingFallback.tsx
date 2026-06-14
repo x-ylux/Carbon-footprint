@@ -11,3 +11,5 @@ export const LoadingFallback: React.FC = () => (
     </div>
   </div>
 );
+
+export default LoadingFallback;
