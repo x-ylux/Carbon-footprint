@@ -1,17 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import {
-  Users,
-  Calendar,
-  MapPin,
-  Target,
-  TrendingUp,
-  Megaphone,
-  Loader2,
-  Leaf,
-  Award,
-  CheckCircle2,
-} from 'lucide-react';
+import { useAuth } from '../context/useAuth';
+import { useToast } from '../context/ToastContext';
+import { useNavigate } from 'react-router-dom';
+import { Users, Calendar, MapPin, Target, TrendingUp, Megaphone, Loader as Loader2, Leaf, Award, CircleCheck as CheckCircle2 } from 'lucide-react';
 
 interface CollectiveEvent {
   id: string;
@@ -117,10 +109,16 @@ const MOCK_CHALLENGES: GroupChallenge[] = [
 ];
 
 export const CollectiveAction: React.FC = () => {
+  const { user } = useAuth();
+  const { success, error, info } = useToast();
+  const navigate = useNavigate();
   const [events, setEvents] = useState<CollectiveEvent[]>([]);
   const [challenges, setChallenges] = useState<GroupChallenge[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalImpact, setTotalImpact] = useState(0);
+  const [joinedEvents, setJoinedEvents] = useState<Set<string>>(new Set());
+  const [joinedChallenges, setJoinedChallenges] = useState<Set<string>>(new Set());
+  const [joiningId, setJoiningId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -158,6 +156,76 @@ export const CollectiveAction: React.FC = () => {
     };
     fetchData();
   }, []);
+
+  const handleJoinEvent = async (eventId: string) => {
+    if (!user) {
+      info('Sign in required', 'Please sign in to join community events.');
+      navigate('/login');
+      return;
+    }
+    if (joinedEvents.has(eventId)) {
+      info('Already joined', 'You have already joined this event.');
+      return;
+    }
+    setJoiningId(eventId);
+    try {
+      const event = events.find((e) => e.id === eventId);
+      if (event) {
+        const { error: updateError } = await supabase
+          .from('collective_events')
+          .update({ participants_count: event.participants_count + 1 })
+          .eq('id', eventId);
+
+        if (updateError) throw updateError;
+        setJoinedEvents((prev) => new Set(prev).add(eventId));
+        setEvents((prev) =>
+          prev.map((e) =>
+            e.id === eventId ? { ...e, participants_count: e.participants_count + 1 } : e
+          )
+        );
+        success('Joined event!', `You have joined "${event.title}".`);
+      }
+    } catch (err) {
+      error('Failed to join event', err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setJoiningId(null);
+    }
+  };
+
+  const handleJoinChallenge = async (challengeId: string) => {
+    if (!user) {
+      info('Sign in required', 'Please sign in to join challenges.');
+      navigate('/login');
+      return;
+    }
+    if (joinedChallenges.has(challengeId)) {
+      info('Already joined', 'You have already joined this challenge.');
+      return;
+    }
+    setJoiningId(challengeId);
+    try {
+      const challenge = challenges.find((c) => c.id === challengeId);
+      if (challenge) {
+        const { error: updateError } = await supabase
+          .from('group_challenges')
+          .update({ participants_count: challenge.participants_count + 1 })
+          .eq('id', challengeId);
+
+        if (updateError) throw updateError;
+        setJoinedChallenges((prev) => new Set(prev).add(challengeId));
+        setChallenges((prev) =>
+          prev.map((c) =>
+            c.id === challengeId ? { ...c, participants_count: c.participants_count + 1 } : c
+          )
+        );
+        success('Challenge accepted!', `You have joined "${challenge.title}".`);
+      }
+    } catch (err) {
+      error('Failed to join challenge', err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setJoiningId(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -262,9 +330,24 @@ export const CollectiveAction: React.FC = () => {
                 </div>
               </div>
               <button
-                className="mt-5 w-full py-2.5 rounded-xl bg-forest-600 hover:bg-forest-700 text-white font-bold text-sm transition-all duration-200 hover:scale-[1.02] cursor-pointer"
+                onClick={() => handleJoinEvent(event.id)}
+                disabled={joiningId === event.id || joinedEvents.has(event.id)}
+                className={`mt-5 w-full py-2.5 rounded-xl font-bold text-sm transition-all duration-200 cursor-pointer flex items-center justify-center gap-2 ${
+                  joinedEvents.has(event.id)
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-forest-600 hover:bg-forest-700 text-white hover:scale-[1.02]'
+                } disabled:opacity-70`}
               >
-                Join Event
+                {joiningId === event.id ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : joinedEvents.has(event.id) ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Joined</span>
+                  </>
+                ) : (
+                  <span>Join Event</span>
+                )}
               </button>
             </div>
           ))}
@@ -325,9 +408,24 @@ export const CollectiveAction: React.FC = () => {
                     </span>
                   </div>
                   <button
-                    className="mt-4 w-full py-2.5 rounded-xl border-2 border-forest-500 text-forest-600 dark:text-forest-400 font-bold text-sm hover:bg-forest-50 dark:hover:bg-forest-950/30 transition-all duration-200 cursor-pointer"
+                    onClick={() => handleJoinChallenge(challenge.id)}
+                    disabled={joiningId === challenge.id || joinedChallenges.has(challenge.id)}
+                    className={`mt-4 w-full py-2.5 rounded-xl font-bold text-sm transition-all duration-200 cursor-pointer flex items-center justify-center gap-2 ${
+                      joinedChallenges.has(challenge.id)
+                        ? 'bg-emerald-600 text-white border-2 border-emerald-600'
+                        : 'border-2 border-forest-500 text-forest-600 dark:text-forest-400 hover:bg-forest-50 dark:hover:bg-forest-950/30'
+                    } disabled:opacity-70`}
                   >
-                    Join Challenge
+                    {joiningId === challenge.id ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : joinedChallenges.has(challenge.id) ? (
+                      <>
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>Joined</span>
+                      </>
+                    ) : (
+                      <span>Join Challenge</span>
+                    )}
                   </button>
                 </div>
               );

@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
 import { useTheme } from '../context/useTheme';
 import { isSupabaseConfigured } from '../lib/supabaseClient';
-import { Leaf, LayoutDashboard, Calculator, Hop as Home, LogIn, LogOut, Menu, X, Sun, Moon, Database, User as UserIcon, Users, Info } from 'lucide-react';
+import { Leaf, LayoutDashboard, Calculator, Hop as Home, LogIn, LogOut, Menu, X, Sun, Moon, Database, User as UserIcon, Users, Info, Settings as SettingsIcon } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
   const { user, profile, signOut } = useAuth();
@@ -110,6 +110,14 @@ export const Navbar: React.FC = () => {
             {/* Auth section */}
             {user ? (
               <div className="flex items-center space-x-3">
+                <Link
+                  to="/settings"
+                  className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all duration-200"
+                  title="Settings"
+                  aria-label="Account settings"
+                >
+                  <SettingsIcon className="w-4 h-4" />
+                </Link>
                 <div className="flex items-center space-x-2 px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-slate-700 dark:text-slate-300">
                   <UserIcon className="w-4 h-4 text-forest-500" />
                   <span className="text-sm font-semibold max-w-[120px] truncate">

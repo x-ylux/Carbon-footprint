@@ -11,6 +11,7 @@ export type AuthContextType = {
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
   signUp: (email: string, password: string, name: string) => Promise<{ error: AuthError | null; needsVerification: boolean | null }>;
   signOut: () => Promise<{ error: AuthError | null }>;
+  fetchProfile: (userId: string) => Promise<void>;
 };
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);

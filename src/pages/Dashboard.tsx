@@ -2,8 +2,10 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '../types/supabase';
 import { useAuth } from '../context/useAuth';
+import { useToast } from '../context/ToastContext';
 import { supabase } from '../lib/supabaseClient';
 import { Link } from 'react-router-dom';
+import ConfirmModal from '../components/ConfirmModal';
 import { 
   ResponsiveContainer, 
   LineChart, 
@@ -15,18 +17,19 @@ import {
   CartesianGrid, 
   Tooltip
 } from 'recharts';
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  Target, 
-  Plus, 
+import {
+  TrendingUp,
+  TrendingDown,
+  Target,
+  Plus,
   Trash2,
   RefreshCw,
   AlertCircle,
   Loader2,
   Lightbulb,
   Wallet,
-  Globe2
+  Globe2,
+  Edit,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { INDIA_AVERAGE_KG, INDIA_AVERAGE_TONNES, TIPS } from '../lib/co2Formulas';
@@ -54,9 +57,10 @@ interface CarbonEntry {
 
 export const Dashboard: React.FC = () => {
   const { user } = useAuth();
+  const { success, error } = useToast();
   const db = supabase as SupabaseClient<Database, 'public', 'public'>;
   const [entries, setEntries] = useState<CarbonEntry[]>([]);
-  const [goal, setGoal] = useState<number>(3000); // Default 3000 kg CO2/year
+  const [goal, setGoal] = useState<number>(3000);
   const [loading, setLoading] = useState(true);
   const [updatingGoal, setUpdatingGoal] = useState(false);
   const [goalInput, setGoalInput] = useState<string>('3000');
@@ -65,6 +69,17 @@ export const Dashboard: React.FC = () => {
   const [budgetInput, setBudgetInput] = useState<string>('250');
   const [updatingBudget, setUpdatingBudget] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; entryId: string | null }>({
+    isOpen: false,
+    entryId: null,
+  });
+  const [editModal, setEditModal] = useState<{ isOpen: boolean; entry: CarbonEntry | null }>({
+    isOpen: false,
+    entry: null,
+  });
+  const [editValue, setEditValue] = useState('');
+  const [editLoading, setEditLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const currentMonthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
 
@@ -209,13 +224,13 @@ export const Dashboard: React.FC = () => {
     }
 
     try {
-      const { error } = await db
+      const { error: updateError } = await db
         .from('goals')
         .upsert({ user_id: user.id, annual_limit: val } as Database['public']['Tables']['goals']['Insert']);
 
-      if (error) throw error;
+      if (updateError) throw updateError;
       setGoal(val);
-      
+
       confetti({
         particleCount: 50,
         angle: 60,
@@ -228,33 +243,104 @@ export const Dashboard: React.FC = () => {
         spread: 55,
         origin: { x: 1 }
       });
+      success('Goal updated', `Annual carbon limit set to ${val.toLocaleString()} kg.`);
     } catch (errorUnknown) {
       const err = errorUnknown instanceof Error ? errorUnknown : new Error('Failed to update carbon limit.');
       console.error(err);
       setErrorMsg(err.message || 'Failed to update carbon limit.');
+      error('Failed to update goal', err.message);
     } finally {
       setUpdatingGoal(false);
     }
   };
 
-  // Handle Delete Entry
-  const handleDeleteEntry = async (entryId: string) => {
-    if (!confirm('Are you sure you want to delete this log?')) return;
+  const handleDeleteEntry = async () => {
+    if (!deleteModal.entryId) return;
+    setDeleteLoading(true);
     setErrorMsg(null);
 
     try {
-      const { error } = await db
+      const { error: deleteError } = await db
         .from('carbon_entries')
         .delete()
-        .eq('id', entryId);
+        .eq('id', deleteModal.entryId);
 
-      if (error) throw error;
-      // State is updated automatically by the real-time channel
+      if (deleteError) throw deleteError;
+      success('Entry deleted', 'Carbon entry has been removed.');
+      setDeleteModal({ isOpen: false, entryId: null });
     } catch (errorUnknown) {
       const err = errorUnknown instanceof Error ? errorUnknown : new Error('Failed to delete record.');
       console.error(err);
       setErrorMsg(err.message || 'Failed to delete record.');
+      error('Failed to delete entry', err.message);
+    } finally {
+      setDeleteLoading(false);
     }
+  };
+
+  const handleEditEntry = async () => {
+    if (!editModal.entry) return;
+    setEditLoading(true);
+    setErrorMsg(null);
+
+    const newValue = Number(editValue);
+    if (isNaN(newValue) || newValue < 0) {
+      setErrorMsg('Value must be a positive number.');
+      setEditLoading(false);
+      return;
+    }
+
+    try {
+      const co2Emission = calculateCO2ForEntry(
+        editModal.entry.category,
+        editModal.entry.subcategory,
+        newValue,
+        editModal.entry.unit
+      );
+
+      const { error: updateError } = await db
+        .from('carbon_entries')
+        .update({ value: newValue, co2_emission: co2Emission })
+        .eq('id', editModal.entry.id);
+
+      if (updateError) throw updateError;
+      success('Entry updated', 'Carbon entry has been modified.');
+      setEditModal({ isOpen: false, entry: null });
+    } catch (errorUnknown) {
+      const err = errorUnknown instanceof Error ? errorUnknown : new Error('Failed to update entry.');
+      console.error(err);
+      setErrorMsg(err.message || 'Failed to update entry.');
+      error('Failed to update entry', err.message);
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const calculateCO2ForEntry = (category: string, subcategory: string, value: number, unit: string): number => {
+    if (category === 'transportation' && subcategory === 'car') return value * 0.12 * 12;
+    if (category === 'transportation' && subcategory === 'bus') return value * 2.5 * 12;
+    if (category === 'transportation' && subcategory === 'metro') return value * 0.05 * 12;
+    if (category === 'transportation' && subcategory === 'bike') return 0;
+    if (category === 'transportation' && subcategory === 'flight') return value * 200;
+    if (category === 'energy' && subcategory === 'electricity') return value * 0.8 * 12;
+    if (category === 'energy' && subcategory === 'gas') return value * 2.0 * 12;
+    if (category === 'energy' && subcategory === 'water') return value * 0.05 * 365;
+    if (category === 'food' && subcategory === 'diet_type') {
+      if (unit === 'vegetarian') return value * 0.5 * 365;
+      if (unit === 'non-vegetarian') return value * 1.2 * 365;
+      return value * 0.85 * 365;
+    }
+    if (category === 'food' && subcategory === 'meat') return value * 12 * 12;
+    if (category === 'shopping' && subcategory === 'online') return value * 5 * 12;
+    if (category === 'shopping' && subcategory === 'clothing') return value * 10 * 12;
+    if (category === 'shopping' && subcategory === 'electronics') return value * 80;
+    if (category === 'shopping' && subcategory === 'waste') return value * 2 * 12;
+    if (category === 'digital' && subcategory === 'streaming') return value * 0.05 * 12;
+    if (category === 'digital' && subcategory === 'cloud') return value * 0.2;
+    if (category === 'digital' && subcategory === 'email') return value * 0.004 * 365;
+    if (category === 'digital' && subcategory === 'calls') return value * 0.1 * 12;
+    if (category === 'digital' && subcategory === 'social') return value * 0.02 * 365;
+    return 0;
   };
 
   // ==========================================
@@ -767,7 +853,7 @@ export const Dashboard: React.FC = () => {
             {/* List entries */}
             <div className="max-h-64 overflow-y-auto space-y-3 pr-1">
               {entries.slice(-5).reverse().map((entry) => (
-                <div 
+                <div
                   key={entry.id}
                   className="flex items-center justify-between p-3 rounded-xl bg-slate-800/90 dark:bg-slate-900/95 border border-slate-700 dark:border-slate-800/50 transition-all duration-200 group hover:border-slate-500 dark:hover:border-slate-700"
                 >
@@ -794,15 +880,28 @@ export const Dashboard: React.FC = () => {
                         kg CO₂/yr
                       </div>
                     </div>
-                    
-                    <button 
-                      type="button"
-                      aria-label="Delete log entry"
-                      onClick={() => handleDeleteEntry(entry.id)}
-                      className="p-1 rounded bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white transition duration-150 cursor-pointer md:opacity-0 group-hover:opacity-100"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        type="button"
+                        aria-label="Edit log entry"
+                        onClick={() => {
+                          setEditModal({ isOpen: true, entry });
+                          setEditValue(String(entry.value));
+                        }}
+                        className="p-1 rounded bg-sky-500/10 text-sky-500 hover:bg-sky-500 hover:text-white transition duration-150 cursor-pointer"
+                      >
+                        <Edit className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Delete log entry"
+                        onClick={() => setDeleteModal({ isOpen: true, entryId: entry.id })}
+                        className="p-1 rounded bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white transition duration-150 cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -817,6 +916,73 @@ export const Dashboard: React.FC = () => {
         <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/40 text-rose-600 dark:text-rose-400 flex items-start space-x-2.5 text-sm font-semibold">
           <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
           <span>{errorMsg}</span>
+        </div>
+      )}
+
+      <ConfirmModal
+        isOpen={deleteModal.isOpen}
+        onClose={() => setDeleteModal({ isOpen: false, entryId: null })}
+        onConfirm={handleDeleteEntry}
+        title="Delete Carbon Entry"
+        message="Are you sure you want to delete this carbon entry? This action cannot be undone."
+        confirmText="Delete"
+        variant="danger"
+        loading={deleteLoading}
+      />
+
+      {editModal.isOpen && editModal.entry && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setEditModal({ isOpen: false, entry: null })}
+          />
+          <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full p-6 animate-fade-in">
+            <h3 className="font-bold text-lg text-slate-800 dark:text-white mb-4">
+              Edit Carbon Entry
+            </h3>
+            <div className="space-y-4">
+              <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-xl">
+                <div className="text-xs text-slate-500 uppercase font-bold">
+                  {editModal.entry.category} / {editModal.entry.subcategory}
+                </div>
+                <div className="text-sm text-slate-700 dark:text-slate-300 mt-1">
+                  {editModal.entry.unit}
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Value
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-forest-500 font-medium"
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setEditModal({ isOpen: false, entry: null })}
+                  className="flex-1 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleEditEntry}
+                  disabled={editLoading}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-forest-600 hover:bg-forest-700 text-white font-bold rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {editLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Edit className="w-4 h-4" />
+                  )}
+                  <span>{editLoading ? 'Saving...' : 'Save'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
