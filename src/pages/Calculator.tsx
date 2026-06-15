@@ -5,21 +5,11 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
+import { useToast } from '../context/ToastContext';
 import { supabase } from '../lib/supabaseClient';
 import type { Database } from '../types/supabase';
-import { 
-  Car, 
-  Zap, 
-  Apple, 
-  ShoppingBag, 
-  Save, 
-  Info, 
-  Loader2, 
-  AlertTriangle,
-  ArrowRight,
-  ArrowLeft,
-  Check
-} from 'lucide-react';
+import ConfirmModal from '../components/ConfirmModal';
+import { Car, Zap, Apple, ShoppingBag, Save, Info, Loader as Loader2, TriangleAlert as AlertTriangle, ArrowRight, ArrowLeft, Check, Trash2 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import {
   transportCO2,
@@ -80,6 +70,7 @@ type TabId = 'transport' | 'energy' | 'food' | 'shopping' | 'digital' | 'cash';
 
 export const Calculator: React.FC = () => {
   const { user } = useAuth();
+  const { success, error } = useToast();
   const db = supabase as SupabaseClient<Database, 'public', 'public'>;
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabId>('transport');
@@ -92,6 +83,11 @@ export const Calculator: React.FC = () => {
     Array<{ id: string; category: string; amount: number; transaction_date: string; co2_emission: number }>
   >([]);
   const [cashSaving, setCashSaving] = useState(false);
+  const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; txId: string | null }>({
+    isOpen: false,
+    txId: null,
+  });
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const cashForm = useForm<CashFormInput>({
     resolver: zodResolver(cashSchema) as Resolver<CashFormInput>,
@@ -402,11 +398,36 @@ export const Calculator: React.FC = () => {
         receipt_url: '',
       });
       setReceiptParseMessage(null);
+      success('Transaction added', `Added ${data.category} transaction for Rs.${data.amount}`);
     } catch (err) {
-      const error = err instanceof Error ? err : new Error('Failed to save transaction.');
-      setErrorMsg(error.message || 'Failed to save transaction.');
+      const errorMsg = err instanceof Error ? err : new Error('Failed to save transaction.');
+      setErrorMsg(errorMsg.message || 'Failed to save transaction.');
+      error('Failed to save transaction', errorMsg.message);
     } finally {
       setCashSaving(false);
+    }
+  };
+
+  const handleDeleteCashTransaction = async () => {
+    if (!deleteModal.txId || !user) return;
+    setDeleteLoading(true);
+
+    try {
+      const { error: deleteError } = await db
+        .from('cash_transactions')
+        .delete()
+        .eq('id', deleteModal.txId);
+
+      if (deleteError) throw deleteError;
+
+      setCashTransactions((prev) => prev.filter((tx) => tx.id !== deleteModal.txId));
+      success('Transaction deleted', 'Cash transaction has been removed.');
+      setDeleteModal({ isOpen: false, txId: null });
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err : new Error('Failed to delete transaction.');
+      error('Failed to delete transaction', errorMsg.message);
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -746,12 +767,22 @@ export const Calculator: React.FC = () => {
                   <div className="space-y-2">
                     <h4 className="text-sm font-bold text-slate-600 dark:text-slate-300">Recent Transactions</h4>
                     {cashTransactions.map((tx) => (
-                      <div key={tx.id} className="flex justify-between items-center p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
+                      <div key={tx.id} className="flex justify-between items-center p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 group">
                         <div>
                           <span className="text-sm font-bold capitalize text-slate-700 dark:text-slate-300">{tx.category}</span>
                           <span className="text-xs text-slate-400 ml-2">₹{Number(tx.amount).toLocaleString()}</span>
                         </div>
-                        <span className="text-sm font-bold text-forest-600">{Math.round(tx.co2_emission)} kg CO₂</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-forest-600">{Math.round(tx.co2_emission)} kg CO₂</span>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteModal({ isOpen: true, txId: tx.id })}
+                            className="p-1 rounded bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white transition opacity-0 group-hover:opacity-100 cursor-pointer"
+                            aria-label="Delete transaction"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -894,6 +925,17 @@ export const Calculator: React.FC = () => {
         </div>
 
       </div>
+
+      <ConfirmModal
+        isOpen={deleteModal.isOpen}
+        onClose={() => setDeleteModal({ isOpen: false, txId: null })}
+        onConfirm={handleDeleteCashTransaction}
+        title="Delete Transaction"
+        message="Are you sure you want to delete this cash transaction? This cannot be undone."
+        confirmText="Delete"
+        variant="danger"
+        loading={deleteLoading}
+      />
     </div>
   );
 };

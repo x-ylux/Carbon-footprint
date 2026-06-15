@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
-import { Leaf, Mail, Lock, Loader2, AlertCircle } from 'lucide-react';
+import { Leaf, Mail, Lock, Loader as Loader2, CircleAlert as AlertCircle } from 'lucide-react';
 
 // Validation Schema
 const loginSchema = z.object({
@@ -105,6 +105,12 @@ export const Login: React.FC = () => {
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
                 Password
               </label>
+              <Link
+                to="/forgot-password"
+                className="text-xs font-semibold text-forest-600 dark:text-forest-400 hover:underline"
+              >
+                Forgot password?
+              </Link>
             </div>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
