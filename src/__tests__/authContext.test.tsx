@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { AuthProvider } from '../context/AuthContext';
-import { AuthContext } from '../context/authContext';
+import { AuthContext } from '../context/auth-context';
 import React from 'react';
 
 vi.mock('../lib/supabaseClient', () => ({

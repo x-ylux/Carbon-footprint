@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../context/useAuth';
-import { useToast } from '../context/ToastContext';
+import { useToast } from '../context/useToast';
 import { useNavigate } from 'react-router-dom';
 import { Users, Calendar, MapPin, Target, TrendingUp, Megaphone, Loader as Loader2, Leaf, Award, CircleCheck as CheckCircle2 } from 'lucide-react';
 

@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
-import { useToast } from '../context/ToastContext';
+import { useToast } from '../context/useToast';
 import { supabase } from '../lib/supabaseClient';
 import type { Database } from '../types/supabase';
 import ConfirmModal from '../components/ConfirmModal';

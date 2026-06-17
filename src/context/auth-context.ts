@@ -9,7 +9,11 @@ export type AuthContextType = {
   profile: Profile | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
-  signUp: (email: string, password: string, name: string) => Promise<{ error: AuthError | null; needsVerification: boolean | null }>;
+  signUp: (
+    email: string,
+    password: string,
+    name: string,
+  ) => Promise<{ error: AuthError | null; needsVerification: boolean | null }>;
   signOut: () => Promise<{ error: AuthError | null }>;
   fetchProfile: (userId: string) => Promise<void>;
 };

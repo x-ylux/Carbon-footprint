@@ -1,34 +1,35 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
-import { AuthContext } from './authContext';
+import { AuthContext } from './auth-context';
 import { supabase } from '../lib/supabaseClient';
-import type { Profile } from './authContext';
+import type { Profile } from './auth-context';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchProfile = async (currentUser: User) => {
+  const fetchProfile = useCallback(async (userId: string, fallbackUser?: User) => {
     try {
       const { data, error } = await supabase
         .from('users')
         .select('*')
-        .eq('id', currentUser.id)
+        .eq('id', userId)
         .single();
 
       if (error) {
-        const fallbackName = typeof currentUser.user_metadata?.name === 'string'
+        const currentUser = fallbackUser ?? null;
+        const fallbackName = typeof currentUser?.user_metadata?.name === 'string'
           ? currentUser.user_metadata.name
-          : currentUser.email?.split('@')[0] || 'User';
+          : currentUser?.email?.split('@')[0] || 'User';
 
         setProfile({
-          id: currentUser.id,
-          email: currentUser.email || '',
+          id: userId,
+          email: currentUser?.email || '',
           name: fallbackName,
           country: null,
           target_budget: null,
-          created_at: currentUser.created_at || new Date().toISOString(),
+          created_at: currentUser?.created_at || new Date().toISOString(),
         });
       } else {
         setProfile(data);
@@ -36,36 +37,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err: unknown) {
       console.error('Catch profile error:', err instanceof Error ? err.message : String(err));
     }
-  };
+  }, []);
 
   useEffect(() => {
-    // onAuthStateChange fires INITIAL_SESSION immediately, handling the initial load
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        try {
-          if (session?.user) {
-            setUser(session.user);
-            await fetchProfile(session.user);
-          } else {
-            setUser(null);
-            setProfile(null);
-          }
-        } finally {
+    let isMounted = true;
+
+    const applySession = async (session: Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session']) => {
+      try {
+        if (session?.user) {
+          setUser(session.user);
+          await fetchProfile(session.user.id, session.user);
+        } else {
+          setUser(null);
+          setProfile(null);
+        }
+      } finally {
+        if (isMounted) {
           setLoading(false);
         }
+      }
+    };
+
+    void supabase.auth.getSession().then(({ data }) => {
+      if (isMounted) {
+        void applySession(data.session);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (_event, session) => {
+        await applySession(session);
       }
     );
 
     return () => {
+      isMounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [fetchProfile]);
 
   const signIn = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (data?.user) {
       setUser(data.user);
-      await fetchProfile(data.user);
+      await fetchProfile(data.user.id, data.user);
     }
     return { error };
   };
@@ -84,10 +99,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (data?.session?.user) {
       setUser(data.session.user);
-      await fetchProfile(data.session.user);
+      await fetchProfile(data.session.user.id, data.session.user);
     } else if (data?.user && data.session) {
       setUser(data.user);
-      await fetchProfile(data.user);
+      await fetchProfile(data.user.id, data.user);
     }
 
     return { error, needsVerification };

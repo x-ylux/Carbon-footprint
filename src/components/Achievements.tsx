@@ -1,28 +1,6 @@
 import React from 'react';
-import { Award, Leaf, Target, TrendingDown, Users, Zap, CircleCheck as CheckCircle2 } from 'lucide-react';
-
-export interface Achievement {
-  id: string;
-  title: string;
-  description: string;
-  icon: React.ReactNode;
-  condition: (stats: AchievementStats) => boolean;
-  progress: (stats: AchievementStats) => number;
-  maxProgress: number;
-  tier: 'bronze' | 'silver' | 'gold' | 'platinum';
-}
-
-export interface AchievementStats {
-  totalEntries: number;
-  totalCO2Saved: number;
-  daysActive: number;
-  belowIndiaAverage: boolean;
-  goalSet: boolean;
-  budgetSet: boolean;
-  joinedEvent: boolean;
-  joinedChallenge: boolean;
-  streakDays: number;
-}
+import { Award, CircleCheck as CheckCircle2 } from 'lucide-react';
+import { ACHIEVEMENTS, type Achievement, type AchievementStats } from './achievements-data';
 
 const tierColors = {
   bronze: {
@@ -51,99 +29,6 @@ const tierColors = {
   },
 };
 
-export const ACHIEVEMENTS: Achievement[] = [
-  {
-    id: 'first_entry',
-    title: 'First Steps',
-    description: 'Log your first carbon footprint calculation',
-    icon: <Leaf className="w-6 h-6" />,
-    condition: (stats) => stats.totalEntries >= 1,
-    progress: (stats) => Math.min(stats.totalEntries, 1),
-    maxProgress: 1,
-    tier: 'bronze',
-  },
-  {
-    id: 'ten_entries',
-    title: 'Data Enthusiast',
-    description: 'Log 10 carbon footprint entries',
-    icon: <Zap className="w-6 h-6" />,
-    condition: (stats) => stats.totalEntries >= 10,
-    progress: (stats) => Math.min(stats.totalEntries, 10),
-    maxProgress: 10,
-    tier: 'silver',
-  },
-  {
-    id: 'below_india',
-    title: 'Eco Warrior',
-    description: 'Get your footprint below India average (1,600 kg/year)',
-    icon: <TrendingDown className="w-6 h-6" />,
-    condition: (stats) => stats.belowIndiaAverage,
-    progress: (stats) => stats.belowIndiaAverage ? 1 : 0,
-    maxProgress: 1,
-    tier: 'gold',
-  },
-  {
-    id: 'goal_setter',
-    title: 'Goal Setter',
-    description: 'Set your annual carbon reduction goal',
-    icon: <Target className="w-6 h-6" />,
-    condition: (stats) => stats.goalSet,
-    progress: (stats) => stats.goalSet ? 1 : 0,
-    maxProgress: 1,
-    tier: 'bronze',
-  },
-  {
-    id: 'budget_planner',
-    title: 'Budget Planner',
-    description: 'Set your monthly carbon budget',
-    icon: <Zap className="w-6 h-6" />,
-    condition: (stats) => stats.budgetSet,
-    progress: (stats) => stats.budgetSet ? 1 : 0,
-    maxProgress: 1,
-    tier: 'bronze',
-  },
-  {
-    id: 'community_member',
-    title: 'Community Member',
-    description: 'Join a community event or challenge',
-    icon: <Users className="w-6 h-6" />,
-    condition: (stats) => stats.joinedEvent || stats.joinedChallenge,
-    progress: (stats) => (stats.joinedEvent || stats.joinedChallenge) ? 1 : 0,
-    maxProgress: 1,
-    tier: 'silver',
-  },
-  {
-    id: 'week_streak',
-    title: 'Week Warrior',
-    description: 'Log entries for 7 consecutive days',
-    icon: <Award className="w-6 h-6" />,
-    condition: (stats) => stats.streakDays >= 7,
-    progress: (stats) => Math.min(stats.streakDays, 7),
-    maxProgress: 7,
-    tier: 'silver',
-  },
-  {
-    id: 'month_streak',
-    title: 'Monthly Champion',
-    description: 'Log entries for 30 consecutive days',
-    icon: <Award className="w-6 h-6" />,
-    condition: (stats) => stats.streakDays >= 30,
-    progress: (stats) => Math.min(stats.streakDays, 30),
-    maxProgress: 30,
-    tier: 'gold',
-  },
-  {
-    id: 'ton_saver',
-    title: 'Tonne Saver',
-    description: 'Reduce your footprint by 1,000 kg from baseline',
-    icon: <Leaf className="w-6 h-6" />,
-    condition: (stats) => stats.totalCO2Saved >= 1000,
-    progress: (stats) => Math.min(Math.round(stats.totalCO2Saved), 1000),
-    maxProgress: 1000,
-    tier: 'platinum',
-  },
-];
-
 interface AchievementCardProps {
   achievement: Achievement;
   stats: AchievementStats;
@@ -163,7 +48,7 @@ export const AchievementCard: React.FC<AchievementCardProps> = ({ achievement, s
     >
       {unlocked && (
         <div className={`absolute -top-2 -right-2 w-6 h-6 ${colors.badge} rounded-full flex items-center justify-center`}>
-          <CheckCircle2 className="w-4 h-4 text-white" />
+          <CheckCircle2 className="w-4 h-4 text-white" aria-hidden="true" />
         </div>
       )}
       <div className="flex items-start gap-3">
@@ -202,7 +87,7 @@ export const AchievementsWidget: React.FC<AchievementsWidgetProps> = ({ stats })
     <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/40 rounded-2xl p-6 shadow-sm space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Award className="w-5 h-5 text-amber-500" />
+          <Award className="w-5 h-5 text-amber-500" aria-hidden="true" />
           <h3 className="font-bold text-lg text-slate-800 dark:text-white">Achievements</h3>
         </div>
         <span className="text-xs font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-full">

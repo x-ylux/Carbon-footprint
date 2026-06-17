@@ -502,7 +502,7 @@ export const mockSupabase = {
     };
   },
 
-  channel: (_channelName: string) => {
+  channel: () => {
     return {
       on: (_type: string, _filter: unknown, callback: (payload: { new: Record<string, unknown>; eventType: string }) => void) => {
         const handler = () => {

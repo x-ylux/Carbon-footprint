@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
-import { useToast } from '../context/ToastContext';
-import { supabase } from '../lib/supabaseClient';
+import { useToast } from '../context/useToast';
+import { isSupabaseConfigured, supabase } from '../lib/supabaseClient';
 import { User, Lock, Download, Trash2, Save, Loader as Loader2, CircleAlert as AlertCircle, Shield, FileText, Eye, EyeOff } from 'lucide-react';
 
 export const Settings: React.FC = () => {
@@ -16,8 +16,8 @@ export const Settings: React.FC = () => {
   );
 
   const [profileLoading, setProfileLoading] = useState(false);
-  const [name, setName] = useState('');
-  const [country, setCountry] = useState('India');
+  const [nameDraft, setNameDraft] = useState<string | null>(null);
+  const [countryDraft, setCountryDraft] = useState<string | null>(null);
 
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
@@ -29,12 +29,8 @@ export const Settings: React.FC = () => {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  useEffect(() => {
-    if (profile) {
-      setName(profile.name || '');
-      setCountry(profile.country || 'India');
-    }
-  }, [profile]);
+  const name = nameDraft ?? profile?.name ?? '';
+  const country = countryDraft ?? profile?.country ?? 'India';
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,6 +45,8 @@ export const Settings: React.FC = () => {
 
       if (updateError) throw updateError;
       await fetchProfile(user.id);
+      setNameDraft(null);
+      setCountryDraft(null);
       success('Profile updated', 'Your profile has been saved successfully.');
     } catch (err) {
       error('Failed to update profile', err instanceof Error ? err.message : 'Unknown error');
@@ -197,8 +195,34 @@ export const Settings: React.FC = () => {
     setDeleteLoading(true);
 
     try {
-      const { error: deleteError } = await supabase.auth.admin.deleteUser(user.id);
-      if (deleteError) throw deleteError;
+      if (isSupabaseConfigured) {
+        const { data, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
+
+        const token = data.session?.access_token;
+        if (!token) {
+          throw new Error('Please sign in again before deleting your account.');
+        }
+
+        const response = await fetch('/api/delete-account', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          const result = await response.json().catch(() => null) as { error?: string } | null;
+          throw new Error(result?.error || 'Account deletion failed.');
+        }
+      } else {
+        localStorage.removeItem('mock_session');
+        localStorage.removeItem('mock_users');
+        localStorage.removeItem('mock_carbon_entries');
+        localStorage.removeItem('mock_cash_transactions');
+        localStorage.removeItem('mock_goals');
+        localStorage.removeItem('mock_budgets');
+      }
 
       await supabase.auth.signOut();
       success('Account deleted', 'Your account and all data have been permanently deleted.');
@@ -228,20 +252,24 @@ export const Settings: React.FC = () => {
         </p>
       </div>
 
-      <div className="flex border-b border-slate-200 dark:border-slate-800 overflow-x-auto">
+      <div className="flex border-b border-slate-200 dark:border-slate-800 overflow-x-auto" role="tablist" aria-label="Settings sections">
         {tabs.map((tab) => {
           const TabIcon = tab.icon;
           return (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              aria-controls={`settings-${tab.id}-panel`}
               className={`flex items-center gap-2 px-4 py-3 border-b-2 font-semibold text-sm transition-all whitespace-nowrap cursor-pointer ${
                 activeTab === tab.id
                   ? 'border-forest-500 text-forest-700 dark:text-forest-400'
                   : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
               }`}
             >
-              <TabIcon className="w-4 h-4" />
+              <TabIcon className="w-4 h-4" aria-hidden="true" />
               <span>{tab.label}</span>
             </button>
           );
@@ -249,10 +277,10 @@ export const Settings: React.FC = () => {
       </div>
 
       {activeTab === 'profile' && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/40 rounded-2xl p-6 space-y-6">
+        <div id="settings-profile-panel" role="tabpanel" className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/40 rounded-2xl p-6 space-y-6">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-forest-100 dark:bg-forest-900/40 rounded-xl">
-              <User className="w-5 h-5 text-forest-600 dark:text-forest-400" />
+              <User className="w-5 h-5 text-forest-600 dark:text-forest-400" aria-hidden="true" />
             </div>
             <div>
               <h2 className="font-bold text-lg text-slate-800 dark:text-white">Profile Information</h2>
@@ -262,10 +290,11 @@ export const Settings: React.FC = () => {
 
           <form onSubmit={handleUpdateProfile} className="space-y-4">
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+              <label htmlFor="settings-email" className="block text-xs font-bold uppercase tracking-wider text-slate-500">
                 Email Address
               </label>
               <input
+                id="settings-email"
                 type="email"
                 value={user?.email || ''}
                 disabled
@@ -275,24 +304,26 @@ export const Settings: React.FC = () => {
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+              <label htmlFor="settings-name" className="block text-xs font-bold uppercase tracking-wider text-slate-500">
                 Full Name
               </label>
               <input
+                id="settings-name"
                 type="text"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => setNameDraft(e.target.value)}
                 className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-forest-500 font-medium"
               />
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+              <label htmlFor="settings-country" className="block text-xs font-bold uppercase tracking-wider text-slate-500">
                 Country
               </label>
               <select
+                id="settings-country"
                 value={country}
-                onChange={(e) => setCountry(e.target.value)}
+                onChange={(e) => setCountryDraft(e.target.value)}
                 className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-forest-500 font-medium"
               >
                 <option value="India">India</option>
@@ -313,9 +344,9 @@ export const Settings: React.FC = () => {
               className="flex items-center gap-2 px-5 py-2.5 bg-forest-600 hover:bg-forest-700 text-white font-bold rounded-xl transition cursor-pointer disabled:opacity-50"
             >
               {profileLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
               ) : (
-                <Save className="w-4 h-4" />
+                <Save className="w-4 h-4" aria-hidden="true" />
               )}
               <span>{profileLoading ? 'Saving...' : 'Save Changes'}</span>
             </button>
@@ -324,7 +355,7 @@ export const Settings: React.FC = () => {
       )}
 
       {activeTab === 'security' && (
-        <div className="space-y-6">
+        <div id="settings-security-panel" role="tabpanel" className="space-y-6">
           {isPasswordReset && (
             <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/40">
               <p className="text-sm text-emerald-700 dark:text-emerald-400 font-medium">
@@ -336,7 +367,7 @@ export const Settings: React.FC = () => {
           <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/40 rounded-2xl p-6 space-y-6">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-sky-100 dark:bg-sky-950/30 rounded-xl">
-                <Lock className="w-5 h-5 text-sky-dark dark:text-sky-primary" />
+                <Lock className="w-5 h-5 text-sky-dark dark:text-sky-primary" aria-hidden="true" />
               </div>
               <div>
                 <h2 className="font-bold text-lg text-slate-800 dark:text-white">Change Password</h2>
@@ -346,11 +377,12 @@ export const Settings: React.FC = () => {
 
             <form onSubmit={handlePasswordChange} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+                <label htmlFor="settings-current-password" className="block text-xs font-bold uppercase tracking-wider text-slate-500">
                   Current Password
                 </label>
                 <div className="relative">
                   <input
+                    id="settings-current-password"
                     type={showPasswords ? 'text' : 'password'}
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
@@ -360,18 +392,20 @@ export const Settings: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowPasswords(!showPasswords)}
+                    aria-label={showPasswords ? 'Hide passwords' : 'Show passwords'}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                   >
-                    {showPasswords ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {showPasswords ? <EyeOff className="w-4 h-4" aria-hidden="true" /> : <Eye className="w-4 h-4" aria-hidden="true" />}
                   </button>
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+                <label htmlFor="settings-new-password" className="block text-xs font-bold uppercase tracking-wider text-slate-500">
                   New Password
                 </label>
                 <input
+                  id="settings-new-password"
                   type={showPasswords ? 'text' : 'password'}
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
@@ -382,10 +416,11 @@ export const Settings: React.FC = () => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+                <label htmlFor="settings-confirm-password" className="block text-xs font-bold uppercase tracking-wider text-slate-500">
                   Confirm New Password
                 </label>
                 <input
+                  id="settings-confirm-password"
                   type={showPasswords ? 'text' : 'password'}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
@@ -401,9 +436,9 @@ export const Settings: React.FC = () => {
                 className="flex items-center gap-2 px-5 py-2.5 bg-sky-primary hover:bg-sky-dark text-white font-bold rounded-xl transition cursor-pointer disabled:opacity-50"
               >
                 {passwordLoading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
                 ) : (
-                  <Shield className="w-4 h-4" />
+                  <Shield className="w-4 h-4" aria-hidden="true" />
                 )}
                 <span>{passwordLoading ? 'Updating...' : 'Update Password'}</span>
               </button>
@@ -413,11 +448,11 @@ export const Settings: React.FC = () => {
       )}
 
       {activeTab === 'data' && (
-        <div className="space-y-6">
+        <div id="settings-data-panel" role="tabpanel" className="space-y-6">
           <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/40 rounded-2xl p-6 space-y-6">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-emerald-100 dark:bg-emerald-950/30 rounded-xl">
-                <Download className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                <Download className="w-5 h-5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
               </div>
               <div>
                 <h2 className="font-bold text-lg text-slate-800 dark:text-white">Export Your Data</h2>
@@ -432,9 +467,9 @@ export const Settings: React.FC = () => {
                 className="flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-xl transition cursor-pointer disabled:opacity-50"
               >
                 {exportLoading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
                 ) : (
-                  <FileText className="w-4 h-4" />
+                  <FileText className="w-4 h-4" aria-hidden="true" />
                 )}
                 <span>Export as CSV</span>
               </button>
@@ -444,9 +479,9 @@ export const Settings: React.FC = () => {
                 className="flex items-center justify-center gap-2 px-5 py-2.5 bg-forest-600 hover:bg-forest-700 text-white font-bold rounded-xl transition cursor-pointer disabled:opacity-50"
               >
                 {exportLoading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
                 ) : (
-                  <Download className="w-4 h-4" />
+                  <Download className="w-4 h-4" aria-hidden="true" />
                 )}
                 <span>Export as JSON</span>
               </button>
@@ -456,7 +491,7 @@ export const Settings: React.FC = () => {
           <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/40 rounded-2xl p-6 space-y-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-rose-100 dark:bg-rose-950/30 rounded-xl">
-                <Trash2 className="w-5 h-5 text-rose-600 dark:text-rose-400" />
+                <Trash2 className="w-5 h-5 text-rose-600 dark:text-rose-400" aria-hidden="true" />
               </div>
               <div>
                 <h2 className="font-bold text-lg text-rose-800 dark:text-rose-300">Danger Zone</h2>
@@ -471,13 +506,13 @@ export const Settings: React.FC = () => {
                 onClick={() => setShowDeleteConfirm(true)}
                 className="flex items-center gap-2 px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl transition cursor-pointer"
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="w-4 h-4" aria-hidden="true" />
                 <span>Delete My Account</span>
               </button>
             ) : (
               <div className="space-y-4 p-4 bg-rose-100/50 dark:bg-rose-950/30 rounded-xl">
                 <div className="flex items-start gap-2 text-rose-700 dark:text-rose-400">
-                  <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                  <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" aria-hidden="true" />
                   <p className="text-sm font-medium">
                     This action cannot be undone. All your carbon entries, transactions, goals, and
                     personal data will be permanently deleted.
@@ -496,9 +531,9 @@ export const Settings: React.FC = () => {
                     className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl transition cursor-pointer disabled:opacity-50"
                   >
                     {deleteLoading ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
                     ) : (
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-4 h-4" aria-hidden="true" />
                     )}
                     <span>{deleteLoading ? 'Deleting...' : 'Confirm Delete'}</span>
                   </button>
