@@ -1,5 +1,5 @@
 # React + TypeScript + Vite
-Eco Trace 
+Eco Trace :- A website that traces your carbon footprint
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:
