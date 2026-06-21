@@ -9,23 +9,29 @@ export interface Database {
           email: string;
           name: string | null;
           country: string | null;
+          region: string | null;
           target_budget: number | null;
           created_at: string;
+          updated_at: string;
         };
         Insert: {
           id?: string;
           email: string;
           name?: string | null;
           country?: string | null;
+          region?: string | null;
           target_budget?: number | null;
           created_at?: string;
+          updated_at?: string;
         };
         Update: {
           email?: string;
           name?: string | null;
           country?: string | null;
+          region?: string | null;
           target_budget?: number | null;
           created_at?: string;
+          updated_at?: string;
         };
         Relationships: [];
       };
@@ -39,6 +45,7 @@ export interface Database {
           unit: string;
           co2_emission: number;
           created_at: string;
+          updated_at: string;
         };
         Insert: {
           id?: string;
@@ -49,6 +56,7 @@ export interface Database {
           unit: string;
           co2_emission: number;
           created_at?: string;
+          updated_at?: string;
         };
         Update: {
           category?: string;
@@ -57,6 +65,7 @@ export interface Database {
           unit?: string;
           co2_emission?: number;
           created_at?: string;
+          updated_at?: string;
         };
         Relationships: [];
       };
@@ -72,6 +81,7 @@ export interface Database {
           transaction_date: string;
           co2_emission: number;
           created_at: string;
+          updated_at: string;
         };
         Insert: {
           id?: string;
@@ -84,6 +94,7 @@ export interface Database {
           transaction_date: string;
           co2_emission: number;
           created_at?: string;
+          updated_at?: string;
         };
         Update: {
           category?: string;
@@ -94,6 +105,7 @@ export interface Database {
           transaction_date?: string;
           co2_emission?: number;
           created_at?: string;
+          updated_at?: string;
         };
         Relationships: [];
       };

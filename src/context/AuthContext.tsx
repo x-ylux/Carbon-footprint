@@ -28,8 +28,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           email: currentUser?.email || '',
           name: fallbackName,
           country: null,
+          region: null,
           target_budget: null,
           created_at: currentUser?.created_at || new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         });
       } else {
         setProfile(data);

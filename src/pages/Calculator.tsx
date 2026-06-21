@@ -9,7 +9,7 @@ import { useToast } from '../context/useToast';
 import { supabase } from '../lib/supabaseClient';
 import type { Database } from '../types/supabase';
 import ConfirmModal from '../components/ConfirmModal';
-import { Car, Zap, Apple, ShoppingBag, Save, Info, Loader as Loader2, TriangleAlert as AlertTriangle, ArrowRight, ArrowLeft, Check, Trash2 } from 'lucide-react';
+import { Car, Zap, Apple, ShoppingBag, Save, Info, Loader as Loader2, TriangleAlert as AlertTriangle, ArrowRight, ArrowLeft, Check, Trash2, Globe } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import {
   transportCO2,
@@ -20,8 +20,12 @@ import {
   cashTransactionCO2,
   cashCategoryFactors,
   calculateCarbonEmission,
+  getCarbonIndicatorForRegion,
+  REGION_FACTORS,
+  type RegionCode,
 } from '../lib/co2Formulas';
 import { Monitor, Wallet } from 'lucide-react';
+import { REGION_OPTIONS, type TabId } from '../components/calculator/field-config';
 
 // Validation Schema
 const calculatorSchema = z.object({
@@ -67,7 +71,7 @@ const cashSchema = z.object({
 
 type CashFormInput = z.infer<typeof cashSchema>;
 
-type TabId = 'transport' | 'energy' | 'food' | 'shopping' | 'digital' | 'cash';
+
 
 export const Calculator: React.FC = () => {
   const { user } = useAuth();
@@ -75,6 +79,7 @@ export const Calculator: React.FC = () => {
   const db = supabase as SupabaseClient<Database, 'public', 'public'>;
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabId>('transport');
+  const [region, setRegion] = useState<RegionCode>('IN');
   const [saveLoading, setSaveLoading] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -191,6 +196,13 @@ export const Calculator: React.FC = () => {
     };
   }, [watchedValues, cashTotal]);
 
+  const regionIndicator = useMemo(
+    () => getCarbonIndicatorForRegion(emissions.total, region),
+    [emissions.total, region],
+  );
+
+  const regionFactor = REGION_FACTORS[region] ?? REGION_FACTORS.IN;
+
   const parseReceiptText = () => {
     setReceiptParseMessage(null);
     const text = receiptText.trim();
@@ -224,33 +236,6 @@ export const Calculator: React.FC = () => {
   };
 
   // Determine indicator color
-  const getIndicator = () => {
-    const total = emissions.total;
-    if (total < 1600) {
-      return {
-        label: 'Low (Eco-Friendly)',
-        desc: 'Awesome! Your footprint is lower than the average Indian citizen (1,600 kg). Keep it up!',
-        color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50',
-        badge: 'bg-emerald-500 text-white'
-      };
-    } else if (total >= 1600 && total <= 3000) {
-      return {
-        label: 'Moderate',
-        desc: 'Your footprint is around the average. Try adopting a vegetarian diet or taking transit to reach the sustainable limit (< 2,000 kg).',
-        color: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50',
-        badge: 'bg-amber-500 text-white'
-      };
-    } else {
-      return {
-        label: 'High Carbon Cost',
-        desc: 'Warning: Your footprint is high. Setting clean energy plans and carpooling are great ways to reduce emissions.',
-        color: 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50',
-        badge: 'bg-rose-500 text-white'
-      };
-    }
-  };
-
-  const indicator = getIndicator();
 
   // Save to database
   const onSave: SubmitHandler<CalculatorFormInput> = async (data) => {
@@ -797,9 +782,24 @@ export const Calculator: React.FC = () => {
         {/* Right Sticky Summary Panel */}
         <div className="lg:col-span-4 lg:sticky lg:top-20 space-y-6">
           <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/40 rounded-2xl shadow-sm p-6 space-y-6 transition-all duration-300">
-            <h3 className="font-display font-extrabold text-xl text-slate-800 dark:text-white">
-              Emissions Summary
-            </h3>
+            <div className="flex items-center justify-between gap-4">
+              <h3 className="font-display font-extrabold text-xl text-slate-800 dark:text-white">
+                Emissions Summary
+              </h3>
+              <label className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+                <Globe className="w-4 h-4" />
+                <select
+                  value={region}
+                  onChange={(e) => setRegion(e.target.value as RegionCode)}
+                  className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-emerald-400 outline-none"
+                  aria-label="Select your region for accurate emission factors"
+                >
+                  {REGION_OPTIONS.map((opt) => (
+                    <option key={opt.code} value={opt.code}>{opt.label}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
 
             {/* Total Indicator Ring */}
             <div className="flex flex-col items-center py-4 border-b border-slate-100 dark:border-slate-800">
@@ -807,9 +807,9 @@ export const Calculator: React.FC = () => {
                 {/* Active Colored Ring Segment */}
                 <div
                   className={`absolute inset-0 rounded-full border-8 transition-all duration-500 ${
-                    emissions.total < 1600
+                    regionIndicator.tone === 'emerald'
                       ? 'border-emerald-500'
-                      : emissions.total <= 3000
+                      : regionIndicator.tone === 'amber'
                       ? 'border-amber-500'
                       : 'border-rose-500'
                   }`}
@@ -821,6 +821,13 @@ export const Calculator: React.FC = () => {
                   kg CO₂e / year
                 </span>
               </div>
+              <span className={`mt-3 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                regionIndicator.tone === 'emerald' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                : regionIndicator.tone === 'amber' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                : 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400'
+              }`}>
+                {regionIndicator.label}
+              </span>
             </div>
 
             {/* Category breakdown details */}
@@ -869,22 +876,40 @@ export const Calculator: React.FC = () => {
               </div>
             </div>
 
-            {/* India Average Comparison */}
-            <div className={`p-4 rounded-xl border ${indicator.color} transition-colors duration-300 space-y-2`}>
+            {/* Regional Average Comparison */}
+            <div className={`p-4 rounded-xl border transition-colors duration-300 space-y-2 ${
+              regionIndicator.tone === 'emerald'
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-900/20 dark:border-emerald-800 dark:text-emerald-400'
+                : regionIndicator.tone === 'amber'
+                ? 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-400'
+                : 'bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-900/20 dark:border-rose-800 dark:text-rose-400'
+            }`}>
               <div className="flex items-center space-x-2">
                 <Info className="w-4 h-4" />
                 <span className="font-extrabold text-sm uppercase tracking-wider">
-                  India Average Comparison
+                  Regional Comparison
                 </span>
               </div>
               <p className="text-xs leading-relaxed font-medium">
-                {indicator.desc}
+                {regionIndicator.description}
               </p>
               <div className="flex items-center justify-between pt-1 text-xs">
                 <span className="font-bold">Your Status:</span>
-                <span className={`px-2 py-0.5 rounded-full font-bold text-3xs uppercase ${indicator.badge}`}>
-                  {indicator.label}
+                <span className={`px-2 py-0.5 rounded-full font-bold text-3xs uppercase ${
+                  regionIndicator.tone === 'emerald' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                  : regionIndicator.tone === 'amber' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                  : 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'
+                }`}>
+                  {regionIndicator.label}
                 </span>
+              </div>
+              <div className="flex items-center justify-between pt-1 text-xs border-t border-current/10 mt-2">
+                <span className="font-medium opacity-70">Regional avg:</span>
+                <span className="font-bold">{regionFactor.perCapitaAverageKg.toLocaleString()} kg/yr</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-medium opacity-70">Safe target:</span>
+                <span className="font-bold">{regionFactor.safeTargetKg.toLocaleString()} kg/yr</span>
               </div>
             </div>
 
