@@ -17,22 +17,9 @@ import {
   CartesianGrid, 
   Tooltip
 } from 'recharts';
-import {
-  TrendingUp,
-  TrendingDown,
-  Target,
-  Plus,
-  Trash2,
-  RefreshCw,
-  AlertCircle,
-  Loader2,
-  Lightbulb,
-  Wallet,
-  Globe2,
-  Edit,
-} from 'lucide-react';
+import { TrendingUp, TrendingDown, Target, Plus, Trash2, RefreshCw, CircleAlert as AlertCircle, Loader as Loader2, Lightbulb, Wallet, Globe as Globe2, CreditCard as Edit } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { INDIA_AVERAGE_KG, INDIA_AVERAGE_TONNES, TIPS } from '../lib/co2Formulas';
+import { INDIA_AVERAGE_KG, INDIA_AVERAGE_TONNES, TIPS, calculateCarbonEmission } from '../lib/co2Formulas';
 
 const DashboardTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value?: number | string }>; label?: string | number }) => {
   if (!active || !payload || payload.length === 0) return null;
@@ -291,12 +278,12 @@ export const Dashboard: React.FC = () => {
     }
 
     try {
-      const co2Emission = calculateCO2ForEntry(
-        editModal.entry.category,
-        editModal.entry.subcategory,
-        newValue,
-        editModal.entry.unit
-      );
+      const co2Emission = calculateCarbonEmission({
+        category: editModal.entry.category,
+        subcategory: editModal.entry.subcategory,
+        value: newValue,
+        unit: editModal.entry.unit,
+      });
 
       const { error: updateError } = await db
         .from('carbon_entries')
@@ -314,33 +301,6 @@ export const Dashboard: React.FC = () => {
     } finally {
       setEditLoading(false);
     }
-  };
-
-  const calculateCO2ForEntry = (category: string, subcategory: string, value: number, unit: string): number => {
-    if (category === 'transportation' && subcategory === 'car') return value * 0.12 * 12;
-    if (category === 'transportation' && subcategory === 'bus') return value * 2.5 * 12;
-    if (category === 'transportation' && subcategory === 'metro') return value * 0.05 * 12;
-    if (category === 'transportation' && subcategory === 'bike') return 0;
-    if (category === 'transportation' && subcategory === 'flight') return value * 200;
-    if (category === 'energy' && subcategory === 'electricity') return value * 0.8 * 12;
-    if (category === 'energy' && subcategory === 'gas') return value * 2.0 * 12;
-    if (category === 'energy' && subcategory === 'water') return value * 0.05 * 365;
-    if (category === 'food' && subcategory === 'diet_type') {
-      if (unit === 'vegetarian') return value * 0.5 * 365;
-      if (unit === 'non-vegetarian') return value * 1.2 * 365;
-      return value * 0.85 * 365;
-    }
-    if (category === 'food' && subcategory === 'meat') return value * 12 * 12;
-    if (category === 'shopping' && subcategory === 'online') return value * 5 * 12;
-    if (category === 'shopping' && subcategory === 'clothing') return value * 10 * 12;
-    if (category === 'shopping' && subcategory === 'electronics') return value * 80;
-    if (category === 'shopping' && subcategory === 'waste') return value * 2 * 12;
-    if (category === 'digital' && subcategory === 'streaming') return value * 0.05 * 12;
-    if (category === 'digital' && subcategory === 'cloud') return value * 0.2;
-    if (category === 'digital' && subcategory === 'email') return value * 0.004 * 365;
-    if (category === 'digital' && subcategory === 'calls') return value * 0.1 * 12;
-    if (category === 'digital' && subcategory === 'social') return value * 0.02 * 365;
-    return 0;
   };
 
   // ==========================================

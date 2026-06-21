@@ -19,6 +19,7 @@ import {
   digitalCO2,
   cashTransactionCO2,
   cashCategoryFactors,
+  calculateCarbonEmission,
 } from '../lib/co2Formulas';
 import { Monitor, Wallet } from 'lucide-react';
 
@@ -297,46 +298,12 @@ export const Calculator: React.FC = () => {
           nonZeroRows.map((row) => ({
             ...row,
             user_id: user.id,
-            co2_emission:
-              row.category === 'transportation' && row.subcategory === 'car'
-                ? transportCO2.car(row.value)
-                : row.category === 'transportation' && row.subcategory === 'bus'
-                ? transportCO2.bus(row.value)
-                : row.category === 'transportation' && row.subcategory === 'metro'
-                ? transportCO2.metro(row.value)
-                : row.category === 'transportation' && row.subcategory === 'bike'
-                ? transportCO2.bike()
-                : row.category === 'transportation' && row.subcategory === 'flight'
-                ? transportCO2.flight(row.value)
-                : row.category === 'energy' && row.subcategory === 'electricity'
-                ? energyCO2.electricity(row.value)
-                : row.category === 'energy' && row.subcategory === 'gas'
-                ? energyCO2.gas(row.value)
-                : row.category === 'energy' && row.subcategory === 'water'
-                ? energyCO2.water(row.value)
-                : row.category === 'food' && row.subcategory === 'diet_type'
-                ? foodCO2.mealsPerYear(row.value, row.unit as 'vegetarian' | 'non-vegetarian' | 'mixed')
-                : row.category === 'food' && row.subcategory === 'meat'
-                ? foodCO2.meat(row.value)
-                : row.category === 'shopping' && row.subcategory === 'online'
-                ? shoppingCO2.online(row.value)
-                : row.category === 'shopping' && row.subcategory === 'clothing'
-                ? shoppingCO2.clothing(row.value)
-                : row.category === 'shopping' && row.subcategory === 'electronics'
-                ? shoppingCO2.electronics(row.value)
-                : row.category === 'shopping' && row.subcategory === 'waste'
-                ? shoppingCO2.waste(row.value)
-                : row.category === 'digital' && row.subcategory === 'streaming'
-                ? digitalCO2.streaming(row.value)
-                : row.category === 'digital' && row.subcategory === 'cloud'
-                ? digitalCO2.cloud(row.value)
-                : row.category === 'digital' && row.subcategory === 'email'
-                ? digitalCO2.email(row.value)
-                : row.category === 'digital' && row.subcategory === 'calls'
-                ? digitalCO2.calls(row.value)
-                : row.category === 'digital' && row.subcategory === 'social'
-                ? digitalCO2.social(row.value)
-                : 0,
+            co2_emission: calculateCarbonEmission({
+              category: row.category,
+              subcategory: row.subcategory,
+              value: row.value,
+              unit: row.unit,
+            }),
           }))
         );
 

@@ -1,48 +1,328 @@
-/** CO2 emission formulas — all results in kg CO₂e per year unless noted */
+/** CO2 emission calculations — results in kg CO2e per year unless noted */
 
 export const INDIA_AVERAGE_TONNES = 1.6;
 export const INDIA_AVERAGE_KG = INDIA_AVERAGE_TONNES * 1000; // 1600 kg
 export const CLIMATE_SAFE_TARGET_KG = 2000;
 
-export const transportCO2 = {
-  car: (kmPerMonth: number) => kmPerMonth * 0.12 * 12,
-  bus: (daysPerMonth: number) => daysPerMonth * 2.5 * 12,
-  metro: (kmPerMonth: number) => kmPerMonth * 0.05 * 12,
-  bike: () => 0,
-  flight: (countPerYear: number) => countPerYear * 200,
+export type DietType = 'vegetarian' | 'non-vegetarian' | 'mixed';
+export type EmissionCategory = 'transportation' | 'energy' | 'food' | 'shopping' | 'digital';
+
+/**
+ * Base class for all emission sources. Encapsulates a single calculation
+ * formula and exposes metadata (category, subcategory, unit) so callers
+ * can build entries without re-deriving the formula per call site.
+ */
+export abstract class EmissionSource {
+  abstract readonly category: EmissionCategory;
+  abstract readonly subcategory: string;
+  abstract readonly unit: string;
+
+  /** Compute annual kg CO2e for the given input value. */
+  abstract calculate(value: number): number;
+}
+
+/**
+ * Convenience mixin: most sources share the shape `value * factor * period`.
+ * Centralizing the math avoids drift between the formula table and the
+ * giant switch in the old `calculateCarbonEmission` helper.
+ */
+const MONTHS_PER_YEAR = 12;
+const DAYS_PER_YEAR = 365;
+
+abstract class LinearEmissionSource extends EmissionSource {
+  protected readonly factor: number;
+  protected readonly frequencyPerYear: number;
+
+  constructor(factor: number, frequencyPerYear: number) {
+    super();
+    this.factor = factor;
+    this.frequencyPerYear = frequencyPerYear;
+  }
+
+  calculate(value: number): number {
+    return value * this.factor * this.frequencyPerYear;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Transportation
+// ---------------------------------------------------------------------------
+
+export class CarEmission extends LinearEmissionSource {
+  readonly category = 'transportation' as const;
+  readonly subcategory = 'car';
+  readonly unit = 'km/month';
+  constructor() {
+    super(0.12, MONTHS_PER_YEAR);
+  }
+}
+
+export class BusEmission extends LinearEmissionSource {
+  readonly category = 'transportation' as const;
+  readonly subcategory = 'bus';
+  readonly unit = 'days/month';
+  constructor() {
+    super(2.5, MONTHS_PER_YEAR);
+  }
+}
+
+export class MetroEmission extends LinearEmissionSource {
+  readonly category = 'transportation' as const;
+  readonly subcategory = 'metro';
+  readonly unit = 'km/month';
+  constructor() {
+    super(0.05, MONTHS_PER_YEAR);
+  }
+}
+
+export class BicycleEmission extends EmissionSource {
+  readonly category = 'transportation' as const;
+  readonly subcategory = 'bike';
+  readonly unit = 'km/month';
+  calculate(): number {
+    return 0;
+  }
+}
+
+export class FlightEmission extends LinearEmissionSource {
+  readonly category = 'transportation' as const;
+  readonly subcategory = 'flight';
+  readonly unit = 'flights/year';
+  constructor() {
+    super(200, 1);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Energy
+// ---------------------------------------------------------------------------
+
+export class ElectricityEmission extends LinearEmissionSource {
+  readonly category = 'energy' as const;
+  readonly subcategory = 'electricity';
+  readonly unit = 'units/month';
+  constructor() {
+    super(0.8, MONTHS_PER_YEAR);
+  }
+}
+
+export class GasEmission extends LinearEmissionSource {
+  readonly category = 'energy' as const;
+  readonly subcategory = 'gas';
+  readonly unit = 'liters/month';
+  constructor() {
+    super(2.0, MONTHS_PER_YEAR);
+  }
+}
+
+export class WaterEmission extends LinearEmissionSource {
+  readonly category = 'energy' as const;
+  readonly subcategory = 'water';
+  readonly unit = 'buckets/day';
+  constructor() {
+    super(0.05, DAYS_PER_YEAR);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Food
+// ---------------------------------------------------------------------------
+
+const DIET_FACTORS: Record<DietType, number> = {
+  vegetarian: 0.5,
+  'non-vegetarian': 1.2,
+  mixed: 0.85,
 };
 
-export const energyCO2 = {
-  electricity: (unitsPerMonth: number) => unitsPerMonth * 0.8 * 12,
-  gas: (litersPerMonth: number) => litersPerMonth * 2.0 * 12,
-  water: (bucketsPerDay: number) => bucketsPerDay * 0.05 * 365,
-};
+export class DietEmission extends EmissionSource {
+  readonly category = 'food' as const;
+  readonly subcategory = 'diet_type';
+  private readonly dietType: DietType;
 
-export const foodCO2 = {
-  mealsPerYear: (mealsPerDay: number, foodType: 'vegetarian' | 'non-vegetarian' | 'mixed') => {
-    const factor =
-      foodType === 'vegetarian' ? 0.5 : foodType === 'non-vegetarian' ? 1.2 : 0.85;
-    return mealsPerDay * factor * 365;
+  constructor(dietType: DietType) {
+    super();
+    this.dietType = dietType;
+  }
+
+  get unit(): DietType {
+    return this.dietType;
+  }
+
+  calculate(mealsPerDay: number): number {
+    return mealsPerDay * DIET_FACTORS[this.dietType] * DAYS_PER_YEAR;
+  }
+}
+
+export class MeatEmission extends LinearEmissionSource {
+  readonly category = 'food' as const;
+  readonly subcategory = 'meat';
+  readonly unit = 'kg/month';
+  constructor() {
+    super(12, MONTHS_PER_YEAR);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Shopping & Waste
+// ---------------------------------------------------------------------------
+
+export class OnlineOrdersEmission extends LinearEmissionSource {
+  readonly category = 'shopping' as const;
+  readonly subcategory = 'online';
+  readonly unit = 'orders/month';
+  constructor() {
+    super(5, MONTHS_PER_YEAR);
+  }
+}
+
+export class ClothingEmission extends LinearEmissionSource {
+  readonly category = 'shopping' as const;
+  readonly subcategory = 'clothing';
+  readonly unit = 'items/month';
+  constructor() {
+    super(10, MONTHS_PER_YEAR);
+  }
+}
+
+export class ElectronicsEmission extends EmissionSource {
+  readonly category = 'shopping' as const;
+  readonly subcategory = 'electronics';
+  readonly unit = 'devices/year';
+  calculate(value: number): number {
+    return value * 80;
+  }
+}
+
+export class FoodWasteEmission extends LinearEmissionSource {
+  readonly category = 'shopping' as const;
+  readonly subcategory = 'waste';
+  readonly unit = 'waste_pct';
+  constructor() {
+    super(2, MONTHS_PER_YEAR);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Digital
+// ---------------------------------------------------------------------------
+
+export class StreamingEmission extends LinearEmissionSource {
+  readonly category = 'digital' as const;
+  readonly subcategory = 'streaming';
+  readonly unit = 'hours/month';
+  constructor() {
+    super(0.05, MONTHS_PER_YEAR);
+  }
+}
+
+export class CloudStorageEmission extends EmissionSource {
+  readonly category = 'digital' as const;
+  readonly subcategory = 'cloud';
+  readonly unit = 'GB';
+  calculate(value: number): number {
+    return value * 0.2;
+  }
+}
+
+export class EmailEmission extends LinearEmissionSource {
+  readonly category = 'digital' as const;
+  readonly subcategory = 'email';
+  readonly unit = 'emails/day';
+  constructor() {
+    super(0.004, DAYS_PER_YEAR);
+  }
+}
+
+export class VideoCallsEmission extends LinearEmissionSource {
+  readonly category = 'digital' as const;
+  readonly subcategory = 'calls';
+  readonly unit = 'hours/month';
+  constructor() {
+    super(0.1, MONTHS_PER_YEAR);
+  }
+}
+
+export class SocialMediaEmission extends LinearEmissionSource {
+  readonly category = 'digital' as const;
+  readonly subcategory = 'social';
+  readonly unit = 'hours/day';
+  constructor() {
+    super(0.02, DAYS_PER_YEAR);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Registry: lookup table by (category, subcategory)
+// ---------------------------------------------------------------------------
+
+type SourceFactory = (unit?: string) => EmissionSource;
+
+const SOURCE_FACTORIES: Record<EmissionCategory, Record<string, SourceFactory>> = {
+  transportation: {
+    car: () => new CarEmission(),
+    bus: () => new BusEmission(),
+    metro: () => new MetroEmission(),
+    bike: () => new BicycleEmission(),
+    flight: () => new FlightEmission(),
   },
-  meat: (kgPerMonth: number) => kgPerMonth * 12 * 12,
+  energy: {
+    electricity: () => new ElectricityEmission(),
+    gas: () => new GasEmission(),
+    water: () => new WaterEmission(),
+  },
+  food: {
+    diet_type: (unit) => new DietEmission((unit as DietType) ?? 'mixed'),
+    meat: () => new MeatEmission(),
+  },
+  shopping: {
+    online: () => new OnlineOrdersEmission(),
+    clothing: () => new ClothingEmission(),
+    electronics: () => new ElectronicsEmission(),
+    waste: () => new FoodWasteEmission(),
+  },
+  digital: {
+    streaming: () => new StreamingEmission(),
+    cloud: () => new CloudStorageEmission(),
+    email: () => new EmailEmission(),
+    calls: () => new VideoCallsEmission(),
+    social: () => new SocialMediaEmission(),
+  },
 };
 
-export const shoppingCO2 = {
-  online: (ordersPerMonth: number) => ordersPerMonth * 5 * 12,
-  clothing: (itemsPerMonth: number) => itemsPerMonth * 10 * 12,
-  electronics: (countPerYear: number) => countPerYear * 80,
-  waste: (wastePct: number) => wastePct * 2 * 12,
-};
+/**
+ * Resolve an EmissionSource instance from a stored entry's (category, subcategory, unit).
+ * Returns null for unknown combinations, so callers can skip instead of emitting zero.
+ */
+export function resolveEmissionSource(
+  category: string,
+  subcategory: string,
+  unit?: string,
+): EmissionSource | null {
+  const factory = SOURCE_FACTORIES[category as EmissionCategory]?.[subcategory];
+  return factory ? factory(unit) : null;
+}
 
-export const digitalCO2 = {
-  streaming: (hoursPerMonth: number) => hoursPerMonth * 0.05 * 12,
-  cloud: (gb: number) => gb * 0.2,
-  email: (emailsPerDay: number) => emailsPerDay * 0.004 * 365,
-  calls: (hoursPerMonth: number) => hoursPerMonth * 0.1 * 12,
-  social: (hoursPerDay: number) => hoursPerDay * 0.02 * 365,
-};
+/**
+ * Calculate the CO2 emission for a stored carbon entry. Replaces the previous
+ * 40-line switch statement with a single registry lookup.
+ */
+export function calculateCarbonEmission(params: {
+  category: string;
+  subcategory: string;
+  value: number;
+  unit: string;
+}): number {
+  const source = resolveEmissionSource(params.category, params.subcategory, params.unit);
+  if (!source) return 0;
+  // DietEmission stores the diet type in `unit`; the meals-per-day value is the input.
+  return source.calculate(params.value);
+}
 
-/** kg CO₂ per unit of currency (INR) by category */
+// ---------------------------------------------------------------------------
+// Cash transactions
+// ---------------------------------------------------------------------------
+
+/** kg CO2 per unit of currency (INR) by spending category */
 export const cashCategoryFactors: Record<string, number> = {
   food: 0.005,
   transport: 0.008,
@@ -53,46 +333,190 @@ export const cashCategoryFactors: Record<string, number> = {
   other: 0.005,
 };
 
-export const cashTransactionCO2 = (category: string, amount: number) =>
-  amount * (cashCategoryFactors[category] ?? cashCategoryFactors.other);
+export const CASH_DEFAULT_FACTOR = 0.005;
 
-export const calculateCarbonEmission = (params: {
-  category: string;
-  subcategory: string;
-  value: number;
-  unit: string;
-}) => {
-  const { category, subcategory, value, unit } = params;
+export function cashTransactionCO2(category: string, amount: number): number {
+  const factor = cashCategoryFactors[category] ?? CASH_DEFAULT_FACTOR;
+  return amount * factor;
+}
 
-  if (category === 'transportation' && subcategory === 'car') return value * 0.12 * 12;
-  if (category === 'transportation' && subcategory === 'bus') return value * 2.5 * 12;
-  if (category === 'transportation' && subcategory === 'metro') return value * 0.05 * 12;
-  if (category === 'transportation' && subcategory === 'bike') return 0;
-  if (category === 'transportation' && subcategory === 'flight') return value * 200;
+// ---------------------------------------------------------------------------
+// Domain model: bundles a set of emission sources for one calculator run
+// ---------------------------------------------------------------------------
 
-  if (category === 'energy' && subcategory === 'electricity') return value * 0.8 * 12;
-  if (category === 'energy' && subcategory === 'gas') return value * 2.0 * 12;
-  if (category === 'energy' && subcategory === 'water') return value * 0.05 * 365;
+export interface EmissionBreakdown {
+  transport: number;
+  energy: number;
+  food: number;
+  shopping: number;
+  digital: number;
+  cash: number;
+  total: number;
+}
 
-  if (category === 'food' && subcategory === 'diet_type') {
-    if (unit === 'vegetarian') return value * 0.5 * 365;
-    if (unit === 'non-vegetarian') return value * 1.2 * 365;
-    return value * 0.85 * 365;
+export interface CalculatorValues {
+  carKmPerMonth: number;
+  busDaysPerMonth: number;
+  metroKmPerMonth: number;
+  flightCountPerYear: number;
+  electricityUnitsPerMonth: number;
+  gasLitersPerMonth: number;
+  waterBucketsPerDay: number;
+  dietType: DietType;
+  mealsPerDay: number;
+  meatKgPerMonth: number;
+  onlineOrdersPerMonth: number;
+  clothingItemsPerMonth: number;
+  electronicsCountPerYear: number;
+  foodWastePercent: number;
+  streamingHoursPerMonth: number;
+  cloudStorageGb: number;
+  emailsPerDay: number;
+  videoCallHoursPerMonth: number;
+  socialMediaHoursPerDay: number;
+}
+
+/**
+ * Aggregates a set of emission sources for a single calculation. Each field
+ * owns its own EmissionSource instance, so the breakdown is testable in
+ * isolation and the Calculator page no longer needs to reach into formula
+ * internals.
+ */
+export class CarbonFootprintReport {
+  readonly sources: EmissionSource[];
+
+  constructor(sources: EmissionSource[]) {
+    this.sources = sources;
   }
-  if (category === 'food' && subcategory === 'meat') return value * 12 * 12;
 
-  if (category === 'shopping' && subcategory === 'online') return value * 5 * 12;
-  if (category === 'shopping' && subcategory === 'clothing') return value * 10 * 12;
-  if (category === 'shopping' && subcategory === 'electronics') return value * 80;
-  if (category === 'shopping' && subcategory === 'waste') return value * 2 * 12;
+  static fromCalculatorValues(values: CalculatorValues): CarbonFootprintReport {
+    const sources: EmissionSource[] = [
+      new CarEmission(),
+      new BusEmission(),
+      new MetroEmission(),
+      new FlightEmission(),
+      new ElectricityEmission(),
+      new GasEmission(),
+      new WaterEmission(),
+      new DietEmission(values.dietType),
+      new MeatEmission(),
+      new OnlineOrdersEmission(),
+      new ClothingEmission(),
+      new ElectronicsEmission(),
+      new FoodWasteEmission(),
+      new StreamingEmission(),
+      new CloudStorageEmission(),
+      new EmailEmission(),
+      new VideoCallsEmission(),
+      new SocialMediaEmission(),
+    ];
+    return new CarbonFootprintReport(sources);
+  }
 
-  if (category === 'digital' && subcategory === 'streaming') return value * 0.05 * 12;
-  if (category === 'digital' && subcategory === 'cloud') return value * 0.2;
-  if (category === 'digital' && subcategory === 'email') return value * 0.004 * 365;
-  if (category === 'digital' && subcategory === 'calls') return value * 0.1 * 12;
-  if (category === 'digital' && subcategory === 'social') return value * 0.02 * 365;
+  computeBreakdown(values: CalculatorValues, cashTotal: number): EmissionBreakdown {
+    const transport =
+      new CarEmission().calculate(values.carKmPerMonth) +
+      new BusEmission().calculate(values.busDaysPerMonth) +
+      new MetroEmission().calculate(values.metroKmPerMonth) +
+      new FlightEmission().calculate(values.flightCountPerYear);
 
-  return 0;
+    const energy =
+      new ElectricityEmission().calculate(values.electricityUnitsPerMonth) +
+      new GasEmission().calculate(values.gasLitersPerMonth) +
+      new WaterEmission().calculate(values.waterBucketsPerDay);
+
+    const food =
+      new DietEmission(values.dietType).calculate(values.mealsPerDay) +
+      new MeatEmission().calculate(values.meatKgPerMonth);
+
+    const shopping =
+      new OnlineOrdersEmission().calculate(values.onlineOrdersPerMonth) +
+      new ClothingEmission().calculate(values.clothingItemsPerMonth) +
+      new ElectronicsEmission().calculate(values.electronicsCountPerYear) +
+      new FoodWasteEmission().calculate(values.foodWastePercent);
+
+    const digital =
+      new StreamingEmission().calculate(values.streamingHoursPerMonth) +
+      new CloudStorageEmission().calculate(values.cloudStorageGb) +
+      new EmailEmission().calculate(values.emailsPerDay) +
+      new VideoCallsEmission().calculate(values.videoCallHoursPerMonth) +
+      new SocialMediaEmission().calculate(values.socialMediaHoursPerDay);
+
+    const total = Math.round(transport + energy + food + shopping + digital + cashTotal);
+
+    return {
+      transport: Math.round(transport),
+      energy: Math.round(energy),
+      food: Math.round(food),
+      shopping: Math.round(shopping),
+      digital: Math.round(digital),
+      cash: Math.round(cashTotal),
+      total,
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Backward-compatible functional API (thin wrappers over the OOP classes)
+// ---------------------------------------------------------------------------
+
+const singleton = <T>(ctor: () => T) => {
+  let instance: T | undefined;
+  return () => (instance ??= ctor());
+};
+
+const carSource = singleton(() => new CarEmission());
+const busSource = singleton(() => new BusEmission());
+const metroSource = singleton(() => new MetroEmission());
+const flightSource = singleton(() => new FlightEmission());
+const electricitySource = singleton(() => new ElectricityEmission());
+const gasSource = singleton(() => new GasEmission());
+const waterSource = singleton(() => new WaterEmission());
+const meatSource = singleton(() => new MeatEmission());
+const onlineOrdersSource = singleton(() => new OnlineOrdersEmission());
+const clothingSource = singleton(() => new ClothingEmission());
+const electronicsSource = singleton(() => new ElectronicsEmission());
+const foodWasteSource = singleton(() => new FoodWasteEmission());
+const streamingSource = singleton(() => new StreamingEmission());
+const cloudStorageSource = singleton(() => new CloudStorageEmission());
+const emailSource = singleton(() => new EmailEmission());
+const videoCallsSource = singleton(() => new VideoCallsEmission());
+const socialMediaSource = singleton(() => new SocialMediaEmission());
+
+/** Functional emission calculators — delegates to the OOP classes above. */
+export const transportCO2 = {
+  car: (kmPerMonth: number) => carSource().calculate(kmPerMonth),
+  bus: (daysPerMonth: number) => busSource().calculate(daysPerMonth),
+  metro: (kmPerMonth: number) => metroSource().calculate(kmPerMonth),
+  bike: () => 0,
+  flight: (countPerYear: number) => flightSource().calculate(countPerYear),
+};
+
+export const energyCO2 = {
+  electricity: (unitsPerMonth: number) => electricitySource().calculate(unitsPerMonth),
+  gas: (litersPerMonth: number) => gasSource().calculate(litersPerMonth),
+  water: (bucketsPerDay: number) => waterSource().calculate(bucketsPerDay),
+};
+
+export const foodCO2 = {
+  mealsPerYear: (mealsPerDay: number, foodType: DietType) =>
+    new DietEmission(foodType).calculate(mealsPerDay),
+  meat: (kgPerMonth: number) => meatSource().calculate(kgPerMonth),
+};
+
+export const shoppingCO2 = {
+  online: (ordersPerMonth: number) => onlineOrdersSource().calculate(ordersPerMonth),
+  clothing: (itemsPerMonth: number) => clothingSource().calculate(itemsPerMonth),
+  electronics: (countPerYear: number) => electronicsSource().calculate(countPerYear),
+  waste: (wastePct: number) => foodWasteSource().calculate(wastePct),
+};
+
+export const digitalCO2 = {
+  streaming: (hoursPerMonth: number) => streamingSource().calculate(hoursPerMonth),
+  cloud: (gb: number) => cloudStorageSource().calculate(gb),
+  email: (emailsPerDay: number) => emailSource().calculate(emailsPerDay),
+  calls: (hoursPerMonth: number) => videoCallsSource().calculate(hoursPerMonth),
+  social: (hoursPerDay: number) => socialMediaSource().calculate(hoursPerDay),
 };
 
 export const TIPS = [
